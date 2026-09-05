@@ -1,10 +1,13 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { formatPKR } from "@/lib/format";
-import { budgetSummary } from "@/lib/mock-data";
+import type { BudgetSummaryView } from "@/lib/data/types";
 
-export function BudgetSummary() {
-  const { monthLabel, income, expenses, remaining } = budgetSummary;
+type BudgetSummaryProps = {
+  summary: BudgetSummaryView;
+};
+
+export function BudgetSummary({ summary }: BudgetSummaryProps) {
+  const { monthLabel, income, expenses, remaining } = summary;
 
   return (
     <div className="space-y-4">
@@ -13,9 +16,6 @@ export function BudgetSummary() {
           <h2 className="text-xl font-semibold tracking-tight">Budget</h2>
           <p className="text-sm text-muted-foreground">{monthLabel}</p>
         </div>
-        <Badge variant="outline" className="font-normal">
-          Demo data
-        </Badge>
       </div>
 
       <Card className="border-border/80 bg-primary text-primary-foreground shadow-sm">

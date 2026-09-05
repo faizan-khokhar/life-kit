@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Bell, Cloud, Download, Shield } from "lucide-react";
+import { AccountCard } from "@/components/auth/account-card";
 import { PageContainer } from "@/components/layout/page-container";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,6 +43,8 @@ export default function SettingsPage() {
             Appearance and app preferences.
           </p>
         </div>
+
+        <AccountCard />
 
         <Card className="border-border/80 shadow-sm">
           <CardHeader className="pb-3">

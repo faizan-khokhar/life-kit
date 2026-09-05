@@ -1,9 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatPKR } from "@/lib/format";
-import { spendingByDay } from "@/lib/mock-data";
+import type { SpendingDayView } from "@/lib/data/types";
 
-export function SpendingChart() {
-  const max = Math.max(...spendingByDay.map((d) => d.amount), 1);
+type SpendingChartProps = {
+  days: SpendingDayView[];
+};
+
+export function SpendingChart({ days }: SpendingChartProps) {
+  const max = Math.max(...days.map((d) => d.amount), 1);
 
   return (
     <Card className="border-border/80 shadow-sm">
@@ -11,7 +15,7 @@ export function SpendingChart() {
         <CardTitle className="text-base font-semibold">
           Spending overview
         </CardTitle>
-        <p className="text-sm text-muted-foreground">Last 7 days · Placeholder</p>
+        <p className="text-sm text-muted-foreground">Last 7 days</p>
       </CardHeader>
       <CardContent>
         <div
@@ -19,7 +23,7 @@ export function SpendingChart() {
           role="img"
           aria-label="Weekly spending bar chart"
         >
-          {spendingByDay.map((day) => {
+          {days.map((day) => {
             const height = Math.max(8, Math.round((day.amount / max) * 100));
             return (
               <div
