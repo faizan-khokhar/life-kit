@@ -1,6 +1,8 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
   Empty,
@@ -17,10 +19,29 @@ type CategoryListProps = {
   onSelectCategory: (categoryId: string) => void;
 };
 
+function isPaidFixed(category: CategorySpendView): boolean {
+  return (
+    category.isFixed &&
+    category.budget > 0 &&
+    category.spent >= category.budget
+  );
+}
+
 export function CategoryList({
   categories,
   onSelectCategory,
 }: CategoryListProps) {
+  const [showPaid, setShowPaid] = useState(false);
+
+  const { visible, paidHidden } = useMemo(() => {
+    const paid = categories.filter(isPaidFixed);
+    const active = categories.filter((c) => !isPaidFixed(c));
+    return {
+      visible: showPaid ? [...active, ...paid] : active,
+      paidHidden: paid,
+    };
+  }, [categories, showPaid]);
+
   return (
     <Card className="border-border/80 shadow-sm">
       <CardHeader className="pb-2">
@@ -39,14 +60,15 @@ export function CategoryList({
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
+        ) : visible.length === 0 && paidHidden.length > 0 ? (
+          <p className="px-1 py-2 text-sm text-muted-foreground">
+            All fixed payments are marked paid this month.
+          </p>
         ) : (
-          categories.map((category) => {
+          visible.map((category) => {
             const percent = formatPercent(category.spent, category.budget);
             const remaining = category.budget - category.spent;
-            const isPaid =
-              category.isFixed &&
-              category.budget > 0 &&
-              category.spent >= category.budget;
+            const paid = isPaidFixed(category);
             return (
               <button
                 key={category.id}
@@ -65,10 +87,10 @@ export function CategoryList({
                       ) : null}
                     </p>
                     <p className="text-xs tabular-nums text-muted-foreground">
-                      {isPaid
+                      {paid
                         ? "Paid this month"
                         : `${formatPKR(category.spent)} / ${formatPKR(category.budget)}`}
-                      {!isPaid && remaining < 0 ? (
+                      {!paid && remaining < 0 ? (
                         <span className="text-negative"> · over</span>
                       ) : null}
                     </p>
@@ -83,6 +105,20 @@ export function CategoryList({
             );
           })
         )}
+
+        {paidHidden.length > 0 ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="w-full text-muted-foreground"
+            onClick={() => setShowPaid((v) => !v)}
+          >
+            {showPaid
+              ? "Hide paid"
+              : `Show paid (${paidHidden.length})`}
+          </Button>
+        ) : null}
       </CardContent>
     </Card>
   );
