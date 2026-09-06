@@ -7,6 +7,8 @@ export type BudgetCategory = {
   name: string;
   /** Monthly spending limit for this category. */
   limit: number;
+  /** When true, UI offers one-tap "Mark paid" for the full limit. */
+  isFixed: boolean;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -14,6 +16,7 @@ export type BudgetCategory = {
 export type BudgetCategoryInput = {
   name: string;
   limit: number;
+  isFixed?: boolean;
 };
 
 export type MoneyEntry = {
@@ -54,6 +57,7 @@ export type CategorySpendView = {
   name: string;
   spent: number;
   budget: number;
+  isFixed: boolean;
 };
 
 export type ExpenseListItemView = {

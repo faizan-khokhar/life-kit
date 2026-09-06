@@ -40,6 +40,7 @@ function mapCategory(id: string, data: DocumentData): BudgetCategory {
     id,
     name: String(data.name ?? ""),
     limit: Number(data.limit ?? 0),
+    isFixed: Boolean(data.isFixed),
     createdAt: toDate(data.createdAt),
     updatedAt: toDate(data.updatedAt),
   };
@@ -58,10 +59,12 @@ export async function addBudgetCategory(
   uid: string,
   input: BudgetCategoryInput,
 ): Promise<BudgetCategory> {
+  const isFixed = Boolean(input.isFixed);
   const now = serverTimestamp();
   const ref = await addDoc(budgetCollection(uid), {
     name: input.name.trim(),
     limit: input.limit,
+    isFixed,
     createdAt: now,
     updatedAt: now,
   });
@@ -70,6 +73,7 @@ export async function addBudgetCategory(
     id: ref.id,
     name: input.name.trim(),
     limit: input.limit,
+    isFixed,
     createdAt,
     updatedAt: createdAt,
   };
@@ -83,6 +87,7 @@ export async function updateBudgetCategory(
   const updates: DocumentData = { updatedAt: serverTimestamp() };
   if (patch.name !== undefined) updates.name = patch.name.trim();
   if (patch.limit !== undefined) updates.limit = patch.limit;
+  if (patch.isFixed !== undefined) updates.isFixed = Boolean(patch.isFixed);
   await updateDoc(doc(firestore, "users", uid, "budget", id), updates);
 }
 
@@ -114,21 +119,30 @@ export function deriveBudgetSummary(
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
-/** Rolling last-7-days expense totals for the spending chart. */
+/**
+ * Expense totals by day for the calendar month of `month`.
+ * Days outside the month (or future days in the current month) are omitted
+ * from the chart buckets — we chart each day that has spend or all days
+ * up to today within the month when viewing the current month.
+ */
 export function deriveSpendingByDay(
   entries: MoneyEntry[],
+  month: Date = new Date(),
   now = new Date(),
 ): SpendingDayView[] {
-  const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
-  start.setDate(start.getDate() - 6);
+  const year = month.getFullYear();
+  const monthIndex = month.getMonth();
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const isCurrentMonth =
+    year === now.getFullYear() && monthIndex === now.getMonth();
+  const lastDay = isCurrentMonth ? now.getDate() : daysInMonth;
 
-  const buckets = Array.from({ length: 7 }, (_, i) => {
-    const day = new Date(start);
-    day.setDate(start.getDate() + i);
+  const buckets = Array.from({ length: lastDay }, (_, i) => {
+    const day = i + 1;
+    const date = new Date(year, monthIndex, day);
     return {
-      key: day.toDateString(),
-      label: DAY_LABELS[day.getDay()]!,
+      key: date.toDateString(),
+      label: String(day),
       amount: 0,
     };
   });
@@ -141,6 +155,14 @@ export function deriveSpendingByDay(
     const idx = indexByKey.get(key);
     if (idx === undefined) continue;
     buckets[idx]!.amount += entry.amount;
+  }
+
+  // Compact chart: show weekday labels for last 7 days of the window when many days
+  if (buckets.length > 10) {
+    return buckets.slice(-7).map((b) => {
+      const d = new Date(b.key);
+      return { label: DAY_LABELS[d.getDay()]!, amount: b.amount };
+    });
   }
 
   return buckets.map(({ label, amount }) => ({ label, amount }));
@@ -163,6 +185,7 @@ export function deriveCategorySpend(
     name: category.name,
     spent: spentByName.get(category.name.trim().toLowerCase()) ?? 0,
     budget: category.limit,
+    isFixed: category.isFixed,
   }));
 }
 

@@ -1,8 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import type { Route } from "next";
 import { quickActions } from "@/lib/modules";
 import { cn } from "@/lib/utils";
+
+function hrefForAction(
+  id: string,
+  href: (typeof quickActions)[number]["href"],
+): Route {
+  if (id === "add-expense") return "/budget?action=spend" as Route;
+  return href;
+}
 
 export function QuickActionsRow() {
   return (
@@ -16,10 +25,10 @@ export function QuickActionsRow() {
           return (
             <Link
               key={action.id}
-              href={action.href}
+              href={hrefForAction(action.id, action.href)}
               className={cn(
                 "flex flex-col items-center gap-2 rounded-2xl border border-border/80 bg-card px-2 py-3.5 text-center shadow-sm transition-colors",
-                "hover:bg-accent/40 active:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                "hover:bg-accent/40 active:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               )}
             >
               <span className="flex size-10 items-center justify-center rounded-xl bg-accent text-accent-foreground">

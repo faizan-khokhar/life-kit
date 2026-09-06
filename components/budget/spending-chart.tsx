@@ -15,7 +15,7 @@ export function SpendingChart({ days }: SpendingChartProps) {
         <CardTitle className="text-base font-semibold">
           Spending overview
         </CardTitle>
-        <p className="text-sm text-muted-foreground">Last 7 days</p>
+        <p className="text-sm text-muted-foreground">This period</p>
       </CardHeader>
       <CardContent>
         <div

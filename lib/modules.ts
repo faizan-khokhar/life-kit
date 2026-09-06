@@ -156,7 +156,7 @@ export const quickActions: QuickAction[] = [
     id: "add-expense",
     title: "Add Expense",
     description: "Record a new spending entry",
-    href: "/expenses",
+    href: "/budget",
     icon: Receipt,
   },
   {

@@ -139,7 +139,7 @@ Use these when planning work. They describe maturity, not just “done / not don
 | Module | Category | Route | Lifecycle |
 |--------|----------|-------|-----------|
 | Home (dashboard) | Shell | `/` | `ui-shell` (mock overview) |
-| Budget | Finance | `/budget` | `persisted` |
+| Budget | Finance | `/budget` | `persisted` (calendar month + quick spend) |
 | Expenses | Finance | `/expenses` | `coming-soon` |
 | Bills | Finance | `/bills` | `coming-soon` |
 | Savings | Finance | `/savings` | `coming-soon` |
@@ -292,7 +292,6 @@ Decisions not finalized — do not invent silent answers in PRs:
 
 - Long-term **currency / locale** model (PKR display vs full `en-PK` grouping vs multi-currency)
 - Whether **offline / installability** is required for v1 of real Budget
-- **Budget month model** (calendar month vs custom periods) — current Budget UI labels data “All time” / rolling 7 days; no month filter yet
 - How **income** should be entered long-term (dedicated flow vs typed money entries as today)
 - How **Activity** should aggregate once multiple modules write real events
 - What the **`synced` lifecycle state** means now that persistence is already cloud-backed (**TODO: undecided**)
@@ -303,6 +302,8 @@ Decisions not finalized — do not invent silent answers in PRs:
 
 - **Firestore collection shape** — `users/{uid}/{module}/{docId}` subcollections (see §14)
 - **Firebase Auth providers** — email/password as the baseline; Google and others deferred
+- **Budget month model** — calendar month; stable category limits; spend filtered by `occurredAt`; past months on Budget; Home = current month
+- **Budget UX** — tap category → quick-spend sheet (remaining / presets / custom / Mark paid for fixed); Manage categories under `/budget/manage`; bottom + → Add Expense opens category picker on Budget
 
 **Decided (see §14):** multi-user Firebase Auth accounts with per-user data isolation — the product is open to other people, not device-local indefinitely.
 
@@ -327,6 +328,11 @@ Decisions not finalized — do not invent silent answers in PRs:
 | Email/password Auth baseline | HLD left providers open; need a working sign-in path now | Google / other providers can be added later without changing the data model |
 | Client-side route guard (`app/(app)` + `RequireAuth`) | Firebase Auth state is browser-local; avoid session-cookie complexity for v1 | Brief loading flash before redirect; Firestore Rules remain the real security boundary |
 | Budget derived from `expenses` ledger | Two collections only: `budget` = category limits, `expenses` = income + expense movements | Summary, chart, and category spend are computed in `lib/data/budget.ts` helpers |
+| Calendar month scoping | Spend resets each month without copying categories | Filter entries by `occurredAt`; prev/next month on Budget; Home uses current month |
+| Quick-spend primary path | 2–3 taps to log spend on phone | Tap category (or + → pick category) → amount chip / remaining / Mark paid |
+| `isFixed` on budget categories | Rent-style full monthly payments | Manage toggle; Mark paid writes expense = limit |
+| Manage under Budget | Setup separate from day-to-day logging | `/budget/manage` for add/edit/delete/fixed; no admin mode |
+| Home Financial overview live | Remove demo budget card | `useBudgetData` + this-month `deriveBudgetSummary` |
 
 ---
 
@@ -382,7 +388,7 @@ lib/
   mock-data.ts       static demo data (transitional; still used by Home / Activity)
   format.ts          display helpers
   firebase/          client + admin SDK init, auth context
-  data/              repository layer wrapping Firestore (budget, expenses)
+  data/              repository layer wrapping Firestore (budget, expenses, month helpers, presets)
 ```
 
 ### Related docs
