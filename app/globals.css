@@ -41,6 +41,12 @@
   --color-card: var(--card);
   --color-positive: var(--positive);
   --color-negative: var(--negative);
+  --color-note-default: var(--note-default);
+  --color-note-yellow: var(--note-yellow);
+  --color-note-mint: var(--note-mint);
+  --color-note-rose: var(--note-rose);
+  --color-note-sky: var(--note-sky);
+  --color-note-lavender: var(--note-lavender);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -83,6 +89,14 @@
   --chart-3: oklch(0.75 0.05 180);
   --chart-4: oklch(0.55 0.04 75);
   --chart-5: oklch(0.7 0.03 75);
+
+  /* Soft note card surfaces (module content only — app chrome stays teal) */
+  --note-default: oklch(0.97 0.006 75);
+  --note-yellow: oklch(0.95 0.06 95);
+  --note-mint: oklch(0.95 0.04 165);
+  --note-rose: oklch(0.95 0.04 15);
+  --note-sky: oklch(0.95 0.04 230);
+  --note-lavender: oklch(0.95 0.04 300);
 
   --radius: 1rem;
 
@@ -127,6 +141,13 @@
   --chart-3: oklch(0.5 0.05 180);
   --chart-4: oklch(0.55 0.03 75);
   --chart-5: oklch(0.4 0.02 75);
+
+  --note-default: oklch(0.24 0.012 55);
+  --note-yellow: oklch(0.28 0.04 95);
+  --note-mint: oklch(0.28 0.035 165);
+  --note-rose: oklch(0.28 0.04 15);
+  --note-sky: oklch(0.28 0.04 230);
+  --note-lavender: oklch(0.28 0.04 300);
 
   --sidebar: oklch(0.18 0.01 55);
   --sidebar-foreground: oklch(0.95 0.005 75);

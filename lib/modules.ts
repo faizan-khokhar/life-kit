@@ -105,7 +105,7 @@ export const modules: Module[] = [
     href: "/notes",
     icon: FileText,
     category: "personal",
-    status: "coming-soon",
+    status: "available",
   },
   {
     id: "calculator",

@@ -10,6 +10,7 @@ function hrefForAction(
   href: (typeof quickActions)[number]["href"],
 ): Route {
   if (id === "add-expense") return "/budget?action=spend" as Route;
+  if (id === "add-note") return "/notes?action=new" as Route;
   return href;
 }
 

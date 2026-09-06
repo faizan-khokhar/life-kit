@@ -146,7 +146,7 @@ Use these when planning work. They describe maturity, not just “done / not don
 | Tasks | Personal | `/tasks` | `coming-soon` |
 | Goals | Personal | `/goals` | `coming-soon` |
 | Planner | Personal | `/planner` | `coming-soon` |
-| Notes | Personal | `/notes` | `coming-soon` |
+| Notes | Personal | `/notes` | `client-logic` |
 | Calculator | Tools | `/calculator` | `coming-soon` |
 | Converter | Tools | `/converter` | `coming-soon` |
 | More | Shell | `/more` | Done (catalog UI) |
