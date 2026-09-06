@@ -146,7 +146,7 @@ Use these when planning work. They describe maturity, not just “done / not don
 | Tasks | Personal | `/tasks` | `coming-soon` |
 | Goals | Personal | `/goals` | `coming-soon` |
 | Planner | Personal | `/planner` | `coming-soon` |
-| Notes | Personal | `/notes` | `client-logic` |
+| Notes | Personal | `/notes` | `persisted` |
 | Calculator | Tools | `/calculator` | `coming-soon` |
 | Converter | Tools | `/converter` | `coming-soon` |
 | More | Shell | `/more` | Done (catalog UI) |
@@ -324,7 +324,7 @@ Decisions not finalized — do not invent silent answers in PRs:
 | Firebase for backend | Needed real persistence + auth beyond local-first stage | Introduces external service dependency, requires API keys/env config, Firestore schema design |
 | `lib/data/*` wraps all Firestore access | Keep components clean, allow future backend swap | New modules must go through repository functions, not raw SDK calls |
 | Multi-user Auth accounts | Product is open to other people; each user’s data is isolated | Requires Auth UI, Security Rules, and user-scoped repository APIs |
-| `users/{uid}/…` subcollections | Simpler Security Rules and clear per-user isolation vs top-level + `userId` field | All module data lives under the user doc path; first collections are `budget` and `expenses` |
+| `users/{uid}/…` subcollections | Simpler Security Rules and clear per-user isolation vs top-level + `userId` field | All module data lives under the user doc path; collections include `budget`, `expenses`, `notes`, `noteFolders` |
 | Email/password Auth baseline | HLD left providers open; need a working sign-in path now | Google / other providers can be added later without changing the data model |
 | Client-side route guard (`app/(app)` + `RequireAuth`) | Firebase Auth state is browser-local; avoid session-cookie complexity for v1 | Brief loading flash before redirect; Firestore Rules remain the real security boundary |
 | Budget derived from `expenses` ledger | Two collections only: `budget` = category limits, `expenses` = income + expense movements | Summary, chart, and category spend are computed in `lib/data/budget.ts` helpers |
@@ -333,6 +333,7 @@ Decisions not finalized — do not invent silent answers in PRs:
 | `isFixed` on budget categories | Rent-style full monthly payments | Manage toggle; Mark paid writes expense = limit |
 | Manage under Budget | Setup separate from day-to-day logging | `/budget/manage` for add/edit/delete/fixed; no admin mode |
 | Home Financial overview live | Remove demo budget card | `useBudgetData` + this-month `deriveBudgetSummary` |
+| Notes Firestore + soft delete | Durable notes with future trash | Collections `notes` + `noteFolders` under `users/{uid}`; notes use `deletedAt` (never hard-deleted); Trash UI deferred; folder delete is hard and clears `folderId` on active notes |
 
 ---
 

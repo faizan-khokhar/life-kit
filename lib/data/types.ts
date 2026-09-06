@@ -100,6 +100,8 @@ export type Note = {
   color: NoteColor;
   folderId: string | null;
   pinned: boolean;
+  /** Soft delete: null = active; set when moved to trash. */
+  deletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -114,4 +116,8 @@ export type NoteInput = {
   color?: NoteColor;
   folderId?: string | null;
   pinned?: boolean;
+};
+
+export type NoteFolderInput = {
+  name: string;
 };

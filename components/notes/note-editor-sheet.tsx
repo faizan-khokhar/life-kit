@@ -51,7 +51,7 @@ type NoteEditorSheetProps = {
   folders: NoteFolder[];
   onUpdate: (
     id: string,
-    patch: Partial<Omit<Note, "id" | "createdAt">>,
+    patch: Partial<Omit<Note, "id" | "createdAt" | "deletedAt">>,
   ) => void;
   onDelete: (id: string) => void;
 };
@@ -104,7 +104,7 @@ function NoteEditorForm({
   onClose: () => void;
   onUpdate: (
     id: string,
-    patch: Partial<Omit<Note, "id" | "createdAt">>,
+    patch: Partial<Omit<Note, "id" | "createdAt" | "deletedAt">>,
   ) => void;
   onDelete: (id: string) => void;
 }) {
@@ -264,13 +264,13 @@ function NoteEditorForm({
             <DropdownMenuItem
               variant="destructive"
               onClick={() => {
-                if (window.confirm("Delete this note?")) {
+                if (window.confirm("Move this note to trash?")) {
                   onDelete(note.id);
                 }
               }}
             >
               <Trash2 className="size-4" />
-              Delete note
+              Move to trash
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -6,7 +6,7 @@ import { ArrowDownUp, Plus } from "lucide-react";
 import { FolderChips } from "@/components/notes/folder-chips";
 import { NoteEditorSheet } from "@/components/notes/note-editor-sheet";
 import { NoteList } from "@/components/notes/note-list";
-import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -17,6 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Skeleton } from "@/components/ui/skeleton";
 import { filterNotesByFolder, sortNotes } from "@/lib/data/notes";
 import { useNotesData } from "@/lib/data/use-notes-data";
 import type { NoteSort } from "@/lib/data/types";
@@ -32,19 +33,25 @@ export function NotesView() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const {
+    uid,
     notes,
     folders,
+    loading,
+    error,
+    reload,
     addNote,
     updateNote,
     deleteNote,
     addFolder,
     updateFolder,
     deleteFolder,
+    flushAllPending,
   } = useNotesData();
 
   const [folderId, setFolderId] = useState<string | null>(null);
   const [sort, setSort] = useState<NoteSort>("updated");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
   const openedFromQuery = useRef(false);
 
   const visibleNotes = useMemo(() => {
@@ -57,33 +64,79 @@ export function NotesView() {
       ? null
       : (notes.find((note) => note.id === editingId) ?? null);
 
-  function startNewNote() {
-    const note = addNote("text", folderId);
-    setEditingId(note.id);
+  async function startNewNote() {
+    if (!uid || creating) return;
+    setCreating(true);
+    try {
+      const note = await addNote("text", folderId);
+      if (note) setEditingId(note.id);
+    } finally {
+      setCreating(false);
+    }
   }
 
   useEffect(() => {
     if (searchParams.get("action") !== "new") return;
     if (openedFromQuery.current) return;
+    if (!uid || loading) return;
     openedFromQuery.current = true;
-    const note = addNote("text", folderId);
-    setEditingId(note.id);
-    router.replace("/notes");
-  }, [searchParams, addNote, folderId, router]);
+    void (async () => {
+      const note = await addNote("text", folderId);
+      if (note) setEditingId(note.id);
+      router.replace("/notes");
+    })();
+  }, [searchParams, addNote, folderId, router, uid, loading]);
+
+  if (loading) {
+    return (
+      <div className="space-y-5">
+        <Skeleton className="h-8 w-32" />
+        <Skeleton className="h-9 w-full" />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Skeleton className="h-28 w-full rounded-2xl" />
+          <Skeleton className="h-28 w-full rounded-2xl" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error && notes.length === 0 && folders.length === 0) {
+    return (
+      <div className="space-y-4">
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+        <Button variant="outline" onClick={() => void reload()}>
+          Try again
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="space-y-1">
-          <h2 className="text-xl font-semibold tracking-tight">Notes</h2>
-          <p className="text-sm text-muted-foreground">
-            Quick thoughts and checklists — tap a card to edit.
-          </p>
-        </div>
-        <Badge variant="outline" className="shrink-0 font-normal">
-          Demo data
-        </Badge>
+      <div className="space-y-1">
+        <h2 className="text-xl font-semibold tracking-tight">Notes</h2>
+        <p className="text-sm text-muted-foreground">
+          Quick thoughts and checklists — tap a card to edit.
+        </p>
       </div>
+
+      {error ? (
+        <Alert variant="destructive">
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+            <span>{error}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              onClick={() => void reload()}
+            >
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
@@ -92,10 +145,14 @@ export function NotesView() {
             selectedFolderId={folderId}
             onSelect={setFolderId}
             onAddFolder={(name) => {
-              addFolder(name);
+              void addFolder(name);
             }}
-            onRenameFolder={updateFolder}
-            onDeleteFolder={deleteFolder}
+            onRenameFolder={(id, name) => {
+              void updateFolder(id, name);
+            }}
+            onDeleteFolder={(id) => {
+              void deleteFolder(id);
+            }}
           />
         </div>
         <DropdownMenu>
@@ -131,7 +188,9 @@ export function NotesView() {
       <NoteList
         notes={visibleNotes}
         onOpen={(id) => setEditingId(id)}
-        onCreate={startNewNote}
+        onCreate={() => {
+          void startNewNote();
+        }}
       />
 
       <div className="fixed right-4 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-40 lg:right-8 lg:bottom-8">
@@ -139,7 +198,10 @@ export function NotesView() {
           type="button"
           size="lg"
           className="size-14 rounded-full shadow-lg"
-          onClick={startNewNote}
+          onClick={() => {
+            void startNewNote();
+          }}
+          disabled={creating || !uid}
           aria-label="New note"
         >
           <Plus className="size-6" />
@@ -149,14 +211,19 @@ export function NotesView() {
       <NoteEditorSheet
         open={editingId !== null && editingNote !== null}
         onOpenChange={(open) => {
-          if (!open) setEditingId(null);
+          if (!open) {
+            void flushAllPending();
+            setEditingId(null);
+          }
         }}
         note={editingNote}
         folders={folders}
         onUpdate={updateNote}
         onDelete={(id) => {
-          deleteNote(id);
-          setEditingId(null);
+          void (async () => {
+            const ok = await deleteNote(id);
+            if (ok) setEditingId(null);
+          })();
         }}
       />
     </div>
