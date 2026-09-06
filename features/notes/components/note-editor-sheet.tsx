@@ -9,7 +9,7 @@ import {
   Pin,
   Trash2,
 } from "lucide-react";
-import { ChecklistEditor } from "@/components/notes/checklist-editor";
+import { ChecklistEditor } from "@/features/notes/components/checklist-editor";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -40,8 +40,8 @@ import {
   deriveNoteTitle,
   noteColorClass,
   noteSwatchClass,
-} from "@/lib/data/notes";
-import type { ChecklistItem, Note, NoteFolder, NoteType } from "@/lib/data/types";
+} from "@/features/notes/data/notes";
+import type { ChecklistItem, Note, NoteFolder, NoteType } from "@/features/notes/data/types";
 import { cn } from "cn";
 
 type NoteEditorSheetProps = {
@@ -296,7 +296,7 @@ function NoteEditorForm({
             ref={bodyRef}
             value={note.body}
             onChange={(event) => patch({ body: event.target.value })}
-            placeholder="Start writing…"
+            placeholder="Start writingâ€¦"
             className="min-h-[50vh] flex-1 resize-none rounded-none border-0 bg-transparent px-0 py-2 text-base leading-relaxed shadow-none focus-visible:ring-0"
             aria-label="Note body"
           />

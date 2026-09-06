@@ -5,7 +5,7 @@ import type {
   NoteFolder,
   NoteSort,
   NoteType,
-} from "@/lib/data/types";
+} from "@/features/notes/data/types";
 
 export const NOTE_COLORS: NoteColor[] = [
   "default",
@@ -72,7 +72,7 @@ function firstWords(text: string, count = 6): string {
   const words = text.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return "";
   const slice = words.slice(0, count).join(" ");
-  return words.length > count ? `${slice}…` : slice;
+  return words.length > count ? `${slice}â€¦` : slice;
 }
 
 /** Display title: explicit title, else first words of body / first checklist item. */
@@ -99,7 +99,7 @@ export function noteSnippet(note: Note): string {
   }
   const line = note.body.trim().split(/\n/)[0] ?? "";
   if (!line) return "Empty note";
-  return line.length > 80 ? `${line.slice(0, 80)}…` : line;
+  return line.length > 80 ? `${line.slice(0, 80)}â€¦` : line;
 }
 
 export function filterNotesByFolder(
@@ -200,7 +200,7 @@ export function getSeedNotes(): Note[] {
       id: "note-welcome",
       title: "Welcome to Notes",
       type: "text",
-      body: "Tap + to create a text note or checklist. Color, pin, and file notes into folders — all right here.",
+      body: "Tap + to create a text note or checklist. Color, pin, and file notes into folders â€” all right here.",
       items: [],
       color: "mint",
       folderId: "folder-ideas",

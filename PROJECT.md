@@ -57,7 +57,7 @@ flowchart LR
   User[User on phone or desktop]
   Browser[Browser]
   NextApp[Next.js App Router UI]
-  DataLayer["lib/data repository layer"]
+  DataLayer["features/*/data repository layer"]
   RouteHandlers["app/api Route Handlers"]
   FirebaseAuth[Firebase Auth]
   Firestore[Cloud Firestore]
@@ -197,7 +197,7 @@ Firebase is the backend for product data. Frontend and Route Handlers share one 
 |---------|----------|
 | **Identity** | Firebase Auth — multi-user accounts with per-user data isolation |
 | **Persistence** | Cloud Firestore — documents scoped to the authenticated user |
-| **Repository layer** | [`lib/data/*`](lib/data) wraps every Firestore read/write; components and pages never import the Firebase SDK directly |
+| **Repository layer** | [`features/<name>/data/*`](features) wraps every Firestore read/write; pages and feature components never import the Firebase SDK directly |
 | **Client SDK** | Reads and user-scoped operations only, enforced by Firestore Security Rules |
 | **Admin / sensitive writes** | Next.js Route Handlers (`app/api/**/route.ts`) using the Firebase Admin SDK (server-only credentials; never shipped to the browser) |
 | **Transitional mocks** | Static mocks in [`lib/mock-data.ts`](lib/mock-data.ts) remain for modules not yet on Firestore; formatters stay in [`lib/format.ts`](lib/format.ts) |
@@ -212,20 +212,21 @@ Firebase is the backend for product data. Frontend and Route Handlers share one 
 
 1. Register it in [`lib/modules.ts`](lib/modules.ts) (category, href, icon, status)
 2. Add `app/<route>/page.tsx` — either real UI or `<ComingSoon module={…} />`
-3. Wire nav only via the registry (sidebar lists / More grid update from data)
-4. Update this HLD’s module table and lifecycle
+3. For a real module, co-locate UI + data under `features/<id>/` (components, data, README); keep the page thin
+4. Wire nav only via the registry (sidebar lists / More grid update from data)
+5. Update this HLD’s module table and lifecycle
 
 ### Evolve Budget beyond `ui-shell`
 
-1. Keep the existing page structure under `components/budget/*` as the visual frame
+1. Keep the existing page structure under `features/budget/components/*` as the visual frame
 2. Introduce client state / forms (`client-logic`)
-3. Persist via the `lib/data/*` repository layer against Firestore (`persisted`)
+3. Persist via the `features/budget/data/*` repository layer against Firestore (`persisted`)
 4. Escalate sensitive writes to Route Handlers + Admin SDK when needed
 
 ### Add Firebase-backed persistence to a module
 
 1. Define the Firestore collection / document schema (user-scoped) and matching Security Rules
-2. Add repository functions in `lib/data/<module>.ts` (no SDK imports in components or pages)
+2. Add repository functions in `features/<module>/data/` (no SDK imports in feature UI or pages)
 3. Wire the page through hooks that call those repository functions
 4. Add loading, error, and empty states
 5. If a write needs admin privileges, add a Route Handler under `app/api/**/route.ts` using the Admin SDK
@@ -236,7 +237,8 @@ Firebase is the backend for product data. Frontend and Route Handlers share one 
 - Fork a second navigation catalog
 - Give each module a unique brand color
 - Add scope beyond what is decided in this document
-- Call the Firebase SDK directly from a component or page — go through `lib/data/*`
+- Call the Firebase SDK directly from a component or page — go through `features/<name>/data/*`
+- Import one feature from another (e.g. Notes must not import Budget) — share only via `components/ui` and `lib/*`
 - Ship Admin SDK credentials to the client
 
 ---
@@ -260,8 +262,8 @@ Any planned change should still satisfy:
 
 1. **Budget `client-logic`** — real interactions on the existing shell; still may use in-memory or mock seed data
 2. **Expenses flow** — replace Coming Soon; wire quick action “Add Expense” (`client-logic`)
-3. **Firestore persistence** — `lib/data/*` repository layer for Budget (and later finance / tasks / notes)
-4. **Tasks / Notes** — lightweight tools behind the same data layer
+3. **Firestore persistence** — `features/<name>/data/*` repository layer for Budget (and later finance / tasks / notes)
+4. **Tasks / Notes** — lightweight tools behind the same per-feature data layer
 5. **PWA install polish** — raster icons, optional service worker
 6. **Optional export / collaboration** — only after auth + per-user isolation are solid (see §13)
 
@@ -322,12 +324,13 @@ Decisions not finalized — do not invent silent answers in PRs:
 | `typedRoutes: true` | Catch broken hrefs at compile time | Registry hrefs must be real routes |
 | shadcn primitives added early | Faster future module UI | Prefer existing `components/ui/*` |
 | Firebase for backend | Needed real persistence + auth beyond local-first stage | Introduces external service dependency, requires API keys/env config, Firestore schema design |
-| `lib/data/*` wraps all Firestore access | Keep components clean, allow future backend swap | New modules must go through repository functions, not raw SDK calls |
+| `features/<name>/data/*` wraps all Firestore access | Keep feature UI clean, allow future backend swap | New modules must go through their feature repository, not raw SDK calls |
+| Feature folders under `features/` | Clear ownership for open-source contributors; no Budget↔Notes coupling | Co-locate components + data + README; ESLint blocks cross-feature imports |
 | Multi-user Auth accounts | Product is open to other people; each user’s data is isolated | Requires Auth UI, Security Rules, and user-scoped repository APIs |
 | `users/{uid}/…` subcollections | Simpler Security Rules and clear per-user isolation vs top-level + `userId` field | All module data lives under the user doc path; collections include `budget`, `expenses`, `notes`, `noteFolders` |
 | Email/password Auth baseline | HLD left providers open; need a working sign-in path now | Google / other providers can be added later without changing the data model |
 | Client-side route guard (`app/(app)` + `RequireAuth`) | Firebase Auth state is browser-local; avoid session-cookie complexity for v1 | Brief loading flash before redirect; Firestore Rules remain the real security boundary |
-| Budget derived from `expenses` ledger | Two collections only: `budget` = category limits, `expenses` = income + expense movements | Summary, chart, and category spend are computed in `lib/data/budget.ts` helpers |
+| Budget derived from `expenses` ledger | Two collections only: `budget` = category limits, `expenses` = income + expense movements | Summary, chart, and category spend are computed in `features/budget/data/budget.ts` helpers |
 | Calendar month scoping | Spend resets each month without copying categories | Filter entries by `occurredAt`; prev/next month on Budget; Home uses current month |
 | Quick-spend primary path | 2–3 taps to log spend on phone | Tap category (or + → pick category) → amount chip / remaining / Mark paid |
 | `isFixed` on budget categories | Rent-style full monthly payments | Manage toggle; Mark paid writes expense = limit |
@@ -376,25 +379,28 @@ Deploy Security Rules with `firebase deploy --only firestore:rules` (see `firest
 ```
 app/                 routes, layout, globals.css, manifest, icon
 app/api/             Route Handlers (Admin SDK / sensitive writes)
+features/
+  budget/            Budget UI + data + README (public exports via index.ts)
+  notes/             Notes UI + data + README (public exports via index.ts)
 components/
   layout/            AppShell, Sidebar, MobileNavigation, Header, PageContainer
-  dashboard/         home sections
+  dashboard/         home sections (may compose features)
   modules/           ModuleCard, ModuleGrid, ComingSoon
-  budget/            budget page sections
   quick-action/      + / New menu
   theme/             theme provider, script, toggle
-  ui/                shadcn primitives
+  ui/                shadcn primitives (shared)
 lib/
   modules.ts         live module + quick-action registry
   mock-data.ts       static demo data (transitional; still used by Home / Activity)
   format.ts          display helpers
   firebase/          client + admin SDK init, auth context
-  data/              repository layer wrapping Firestore (budget, expenses, month helpers, presets)
 ```
 
 ### Related docs
 
 - [`AGENTS.md`](AGENTS.md) — Next.js version-matched agent notes for this repo
+- [`features/budget/README.md`](features/budget/README.md) — Budget feature boundary
+- [`features/notes/README.md`](features/notes/README.md) — Notes feature boundary
 - Token source of truth: [`app/globals.css`](app/globals.css)
 
 ---

@@ -2,8 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import { Check, Plus, Trash2 } from "lucide-react";
-import { createChecklistItem } from "@/lib/data/notes";
-import type { ChecklistItem } from "@/lib/data/types";
+import { createChecklistItem } from "@/features/notes/data/notes";
+import type { ChecklistItem } from "@/features/notes/data/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "cn";

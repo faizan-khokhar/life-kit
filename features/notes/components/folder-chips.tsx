@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { FolderPlus, Pencil, Settings2, Trash2 } from "lucide-react";
-import type { NoteFolder } from "@/lib/data/types";
+import type { NoteFolder } from "@/features/notes/data/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -94,7 +94,7 @@ export function FolderChips({
           <SheetHeader className="text-left">
             <SheetTitle>Folders</SheetTitle>
             <SheetDescription>
-              Group notes — delete moves notes back to All.
+              Group notes â€” delete moves notes back to All.
             </SheetDescription>
           </SheetHeader>
 

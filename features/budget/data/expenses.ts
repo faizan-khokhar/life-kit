@@ -16,7 +16,7 @@ import type {
   MoneyEntry,
   MoneyEntryInput,
   MoneyEntryType,
-} from "@/lib/data/types";
+} from "@/features/budget/data/types";
 
 function expensesCollection(uid: string) {
   return collection(firestore, "users", uid, "expenses");

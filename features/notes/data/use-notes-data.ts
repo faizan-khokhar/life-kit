@@ -7,16 +7,16 @@ import {
   deleteNoteFolder,
   getNoteFolders,
   updateNoteFolder,
-} from "@/lib/data/note-folders";
+} from "@/features/notes/data/note-folders";
 import {
   addNote as addNoteDoc,
   clearNotesFolder,
   getNotes,
   softDeleteNote,
   updateNote as updateNoteDoc,
-} from "@/lib/data/notes-repo";
-import { createChecklistItem } from "@/lib/data/notes";
-import type { Note, NoteFolder, NoteType } from "@/lib/data/types";
+} from "@/features/notes/data/notes-repo";
+import { createChecklistItem } from "@/features/notes/data/notes";
+import type { Note, NoteFolder, NoteType } from "@/features/notes/data/types";
 
 const DEBOUNCE_MS = 400;
 
@@ -37,7 +37,10 @@ export function useNotesData() {
   );
   const pendingPatches = useRef<Map<string, NotePatch>>(new Map());
   const uidRef = useRef(uid);
-  uidRef.current = uid;
+
+  useEffect(() => {
+    uidRef.current = uid;
+  }, [uid]);
 
   const flushNoteWrite = useCallback(async (id: string) => {
     const currentUid = uidRef.current;
@@ -66,18 +69,20 @@ export function useNotesData() {
   }, [flushNoteWrite]);
 
   useEffect(() => {
+    const timers = debounceTimers.current;
+    const patches = pendingPatches.current;
     return () => {
-      for (const timer of debounceTimers.current.values()) {
+      for (const timer of timers.values()) {
         clearTimeout(timer);
       }
-      debounceTimers.current.clear();
+      timers.clear();
       // Best-effort flush on unmount (fire-and-forget)
       const currentUid = uidRef.current;
       if (!currentUid) return;
-      for (const [id, patch] of pendingPatches.current.entries()) {
+      for (const [id, patch] of patches.entries()) {
         void updateNoteDoc(currentUid, id, patch);
       }
-      pendingPatches.current.clear();
+      patches.clear();
     };
   }, []);
 

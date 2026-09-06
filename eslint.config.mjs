@@ -13,6 +13,40 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  {
+    files: ["features/notes/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/features/budget", "@/features/budget/**"],
+              message:
+                "Notes must not import Budget. Share only via components/ui or lib/*.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["features/budget/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/features/notes", "@/features/notes/**"],
+              message:
+                "Budget must not import Notes. Share only via components/ui or lib/*.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;

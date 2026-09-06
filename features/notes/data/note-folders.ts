@@ -12,7 +12,7 @@ import {
   type DocumentData,
 } from "firebase/firestore";
 import { firestore } from "@/lib/firebase/client";
-import type { NoteFolder, NoteFolderInput } from "@/lib/data/types";
+import type { NoteFolder, NoteFolderInput } from "@/features/notes/data/types";
 
 function noteFoldersCollection(uid: string) {
   return collection(firestore, "users", uid, "noteFolders");

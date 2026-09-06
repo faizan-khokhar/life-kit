@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { NotesView } from "@/components/notes/notes-view";
+import { NotesView } from "@/features/notes";
 import { PageContainer } from "@/components/layout/page-container";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getModule } from "@/lib/modules";

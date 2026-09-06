@@ -6,7 +6,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { formatPKR } from "@/lib/format";
-import type { ExpenseListItemView } from "@/lib/data/types";
+import type { ExpenseListItemView } from "@/features/budget/data/types";
 
 type ExpenseListProps = {
   expenses: ExpenseListItemView[];
@@ -43,7 +43,7 @@ export function ExpenseList({ expenses }: ExpenseListProps) {
                     {expense.title}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">
-                    {expense.category} · {expense.date}
+                    {expense.category} Â· {expense.date}
                   </p>
                 </div>
                 <p className="shrink-0 text-sm font-semibold tabular-nums text-negative">

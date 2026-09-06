@@ -1,4 +1,4 @@
-import type { MoneyEntry } from "@/lib/data/types";
+import type { MoneyEntry } from "@/features/budget/data/types";
 
 /** Start of the calendar month containing `date` (local time). */
 export function startOfMonth(date: Date): Date {

@@ -5,9 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatPKR, formatPercent } from "@/lib/format";
-import { deriveBudgetSummary } from "@/lib/data/budget";
-import { filterEntriesForMonth, formatMonthLabel } from "@/lib/data/month";
-import { useBudgetData } from "@/lib/data/use-budget-data";
+import {
+  deriveBudgetSummary,
+  filterEntriesForMonth,
+  formatMonthLabel,
+  useBudgetData,
+} from "@/features/budget";
 
 export function FinancialOverview() {
   const { entries, loading, error } = useBudgetData();

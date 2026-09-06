@@ -11,14 +11,14 @@ import {
   type DocumentData,
 } from "firebase/firestore";
 import { firestore } from "@/lib/firebase/client";
-import { NOTE_COLORS } from "@/lib/data/notes";
+import { NOTE_COLORS } from "@/features/notes/data/notes";
 import type {
   ChecklistItem,
   Note,
   NoteColor,
   NoteInput,
   NoteType,
-} from "@/lib/data/types";
+} from "@/features/notes/data/types";
 
 function notesCollection(uid: string) {
   return collection(firestore, "users", uid, "notes");
@@ -166,7 +166,7 @@ export async function updateNote(
   await updateDoc(doc(firestore, "users", uid, "notes", id), updates);
 }
 
-/** Soft delete — sets `deletedAt`; never removes the document. */
+/** Soft delete â€” sets `deletedAt`; never removes the document. */
 export async function softDeleteNote(uid: string, id: string): Promise<void> {
   await updateDoc(doc(firestore, "users", uid, "notes", id), {
     deletedAt: serverTimestamp(),

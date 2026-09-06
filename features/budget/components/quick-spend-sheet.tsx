@@ -4,9 +4,9 @@ import { FormEvent, useMemo, useState } from "react";
 import {
   getAmountPresets,
   lastExpenseAmountForCategory,
-} from "@/lib/data/amount-presets";
-import { addExpense } from "@/lib/data/expenses";
-import type { BudgetCategory, MoneyEntry } from "@/lib/data/types";
+} from "@/features/budget/data/amount-presets";
+import { addExpense } from "@/features/budget/data/expenses";
+import type { BudgetCategory, MoneyEntry } from "@/features/budget/data/types";
 import { formatPKR } from "@/lib/format";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -141,7 +141,7 @@ function QuickSpendForm({
       <SheetHeader className="pb-2">
         <SheetTitle>{category.name}</SheetTitle>
         <SheetDescription>
-          {`${formatPKR(monthSpent)} spent · ${formatPKR(Math.max(remaining, 0))} left of ${formatPKR(category.limit)}`}
+          {`${formatPKR(monthSpent)} spent Â· ${formatPKR(Math.max(remaining, 0))} left of ${formatPKR(category.limit)}`}
         </SheetDescription>
       </SheetHeader>
 
@@ -160,7 +160,7 @@ function QuickSpendForm({
           >
             {isPaid
               ? "Already paid this month"
-              : `Mark paid · ${formatPKR(category.limit)}`}
+              : `Mark paid Â· ${formatPKR(category.limit)}`}
           </Button>
         ) : null}
 
@@ -170,7 +170,7 @@ function QuickSpendForm({
             disabled={saving}
             onClick={() => void saveAmount(remaining)}
           >
-            Use remaining · {formatPKR(remaining)}
+            Use remaining Â· {formatPKR(remaining)}
           </Button>
         ) : null}
 
@@ -224,7 +224,7 @@ function QuickSpendForm({
                   className="w-full"
                   disabled={saving || !customAmount}
                 >
-                  {saving ? "Saving…" : "Save amount"}
+                  {saving ? "Savingâ€¦" : "Save amount"}
                 </Button>
               </SheetFooter>
             </form>

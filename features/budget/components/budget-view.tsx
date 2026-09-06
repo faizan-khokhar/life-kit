@@ -12,22 +12,22 @@ import {
   deriveCategorySpend,
   deriveRecentExpenses,
   deriveSpendingByDay,
-} from "@/lib/data/budget";
-import { addExpense } from "@/lib/data/expenses";
+} from "@/features/budget/data/budget";
+import { addExpense } from "@/features/budget/data/expenses";
 import {
   filterEntriesForMonth,
   formatMonthLabel,
   isSameMonth,
   shiftMonth,
   startOfMonth,
-} from "@/lib/data/month";
-import { useBudgetData } from "@/lib/data/use-budget-data";
-import type { BudgetCategory } from "@/lib/data/types";
-import { BudgetSummary } from "@/components/budget/budget-summary";
-import { CategoryList } from "@/components/budget/category-list";
-import { ExpenseList } from "@/components/budget/expense-list";
-import { QuickSpendSheet } from "@/components/budget/quick-spend-sheet";
-import { SpendingChart } from "@/components/budget/spending-chart";
+} from "@/features/budget/data/month";
+import { useBudgetData } from "@/features/budget/data/use-budget-data";
+import type { BudgetCategory } from "@/features/budget/data/types";
+import { BudgetSummary } from "@/features/budget/components/budget-summary";
+import { CategoryList } from "@/features/budget/components/category-list";
+import { ExpenseList } from "@/features/budget/components/expense-list";
+import { QuickSpendSheet } from "@/features/budget/components/quick-spend-sheet";
+import { SpendingChart } from "@/features/budget/components/spending-chart";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -260,7 +260,7 @@ export function BudgetView() {
                 </div>
                 <DialogFooter>
                   <Button type="submit" disabled={incomeSaving}>
-                    {incomeSaving ? "Saving…" : "Save"}
+                    {incomeSaving ? "Savingâ€¦" : "Save"}
                   </Button>
                 </DialogFooter>
               </form>

@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowDownUp, Plus } from "lucide-react";
-import { FolderChips } from "@/components/notes/folder-chips";
-import { NoteEditorSheet } from "@/components/notes/note-editor-sheet";
-import { NoteList } from "@/components/notes/note-list";
+import { FolderChips } from "@/features/notes/components/folder-chips";
+import { NoteEditorSheet } from "@/features/notes/components/note-editor-sheet";
+import { NoteList } from "@/features/notes/components/note-list";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,9 +18,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
-import { filterNotesByFolder, sortNotes } from "@/lib/data/notes";
-import { useNotesData } from "@/lib/data/use-notes-data";
-import type { NoteSort } from "@/lib/data/types";
+import { filterNotesByFolder, sortNotes } from "@/features/notes/data/notes";
+import { useNotesData } from "@/features/notes/data/use-notes-data";
+import type { NoteSort } from "@/features/notes/data/types";
 
 const SORT_LABELS: Record<NoteSort, string> = {
   updated: "Updated",
@@ -118,7 +118,7 @@ export function NotesView() {
       <div className="space-y-1">
         <h2 className="text-xl font-semibold tracking-tight">Notes</h2>
         <p className="text-sm text-muted-foreground">
-          Quick thoughts and checklists — tap a card to edit.
+          Quick thoughts and checklists â€” tap a card to edit.
         </p>
       </div>
 

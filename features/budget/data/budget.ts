@@ -20,7 +20,7 @@ import type {
   ExpenseListItemView,
   MoneyEntry,
   SpendingDayView,
-} from "@/lib/data/types";
+} from "@/features/budget/data/types";
 
 function budgetCollection(uid: string) {
   return collection(firestore, "users", uid, "budget");
@@ -122,7 +122,7 @@ const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 /**
  * Expense totals by day for the calendar month of `month`.
  * Days outside the month (or future days in the current month) are omitted
- * from the chart buckets — we chart each day that has spend or all days
+ * from the chart buckets â€” we chart each day that has spend or all days
  * up to today within the month when viewing the current month.
  */
 export function deriveSpendingByDay(

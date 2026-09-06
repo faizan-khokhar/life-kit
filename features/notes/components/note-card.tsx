@@ -1,8 +1,8 @@
 "use client";
 
 import { CheckSquare, Pin } from "lucide-react";
-import { noteColorClass, deriveNoteTitle, noteSnippet } from "@/lib/data/notes";
-import type { Note } from "@/lib/data/types";
+import { noteColorClass, deriveNoteTitle, noteSnippet } from "@/features/notes/data/notes";
+import type { Note } from "@/features/notes/data/types";
 import { cn } from "cn";
 
 type NoteCardProps = {

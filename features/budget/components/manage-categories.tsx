@@ -10,9 +10,9 @@ import {
   addBudgetCategory,
   deleteBudgetCategory,
   updateBudgetCategory,
-} from "@/lib/data/budget";
-import { useBudgetData } from "@/lib/data/use-budget-data";
-import type { BudgetCategory } from "@/lib/data/types";
+} from "@/features/budget/data/budget";
+import { useBudgetData } from "@/features/budget/data/use-budget-data";
+import type { BudgetCategory } from "@/features/budget/data/types";
 import { formatPKR } from "@/lib/format";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -109,7 +109,7 @@ export function ManageCategories() {
     if (!uid) return;
     if (
       !window.confirm(
-        `Delete “${category.name}”? Past expenses stay in history.`,
+        `Delete â€œ${category.name}â€? Past expenses stay in history.`,
       )
     ) {
       return;
@@ -220,7 +220,7 @@ export function ManageCategories() {
               />
             </div>
             <Button type="submit" disabled={saving} className="w-full sm:w-auto">
-              {saving ? "Saving…" : "Add category"}
+              {saving ? "Savingâ€¦" : "Add category"}
             </Button>
           </form>
         </CardContent>

@@ -11,7 +11,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { formatPKR, formatPercent } from "@/lib/format";
-import type { CategorySpendView } from "@/lib/data/types";
+import type { CategorySpendView } from "@/features/budget/data/types";
 import { ChevronRight } from "lucide-react";
 
 type CategoryListProps = {
@@ -91,7 +91,7 @@ export function CategoryList({
                         ? "Paid this month"
                         : `${formatPKR(category.spent)} / ${formatPKR(category.budget)}`}
                       {!paid && remaining < 0 ? (
-                        <span className="text-negative"> · over</span>
+                        <span className="text-negative"> Â· over</span>
                       ) : null}
                     </p>
                   </div>

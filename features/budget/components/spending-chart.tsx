@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatPKR } from "@/lib/format";
-import type { SpendingDayView } from "@/lib/data/types";
+import type { SpendingDayView } from "@/features/budget/data/types";
 
 type SpendingChartProps = {
   days: SpendingDayView[];

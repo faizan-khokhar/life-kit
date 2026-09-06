@@ -1,6 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { formatPKR } from "@/lib/format";
-import type { BudgetSummaryView } from "@/lib/data/types";
+import type { BudgetSummaryView } from "@/features/budget/data/types";
 
 type BudgetSummaryProps = {
   summary: BudgetSummaryView;

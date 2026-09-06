@@ -1,7 +1,7 @@
 "use client";
 
 import { FileText } from "lucide-react";
-import { NoteCard } from "@/components/notes/note-card";
+import { NoteCard } from "@/features/notes/components/note-card";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
@@ -11,7 +11,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import type { Note } from "@/lib/data/types";
+import type { Note } from "@/features/notes/data/types";
 
 type NoteListProps = {
   notes: Note[];
@@ -29,7 +29,7 @@ export function NoteList({ notes, onOpen, onCreate }: NoteListProps) {
           </EmptyMedia>
           <EmptyTitle>No notes here</EmptyTitle>
           <EmptyDescription>
-            Create a text note or checklist — it only takes a tap.
+            Create a text note or checklist â€” it only takes a tap.
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent>

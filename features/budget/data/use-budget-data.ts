@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/firebase/auth-context";
-import { getBudgetCategories } from "@/lib/data/budget";
-import { getExpenses } from "@/lib/data/expenses";
-import type { BudgetCategory, MoneyEntry } from "@/lib/data/types";
+import { getBudgetCategories } from "@/features/budget/data/budget";
+import { getExpenses } from "@/features/budget/data/expenses";
+import type { BudgetCategory, MoneyEntry } from "@/features/budget/data/types";
 
 export function useBudgetData() {
   const { user } = useAuth();
