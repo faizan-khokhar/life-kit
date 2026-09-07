@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/firebase/auth-context";
+import { useLocalDb } from "@/lib/local-db/local-db-provider";
 import { getBudgetCategories } from "@/features/budget/data/budget";
 import { getExpenses } from "@/features/budget/data/expenses";
 import type { BudgetCategory, MoneyEntry } from "@/features/budget/data/types";
 
 export function useBudgetData() {
   const { user } = useAuth();
+  const { ready: localReady, error: localError } = useLocalDb();
   const uid = user?.uid;
 
   const [categories, setCategories] = useState<BudgetCategory[]>([]);
@@ -35,6 +37,12 @@ export function useBudgetData() {
         return;
       }
 
+      if (!localReady) {
+        setLoading(true);
+        if (localError) setError(localError);
+        return;
+      }
+
       try {
         const [nextCategories, nextEntries] = await Promise.all([
           getBudgetCategories(uid),
@@ -58,7 +66,7 @@ export function useBudgetData() {
     return () => {
       cancelled = true;
     };
-  }, [uid, reloadToken]);
+  }, [uid, reloadToken, localReady, localError]);
 
   return {
     uid,

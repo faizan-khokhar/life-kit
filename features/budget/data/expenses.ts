@@ -1,87 +1,60 @@
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  orderBy,
-  query,
-  serverTimestamp,
-  Timestamp,
-  updateDoc,
-  type DocumentData,
-} from "firebase/firestore";
-import { firestore } from "@/lib/firebase/client";
 import type {
   MoneyEntry,
   MoneyEntryInput,
-  MoneyEntryType,
 } from "@/features/budget/data/types";
+import { fromIso, nowIso, toIso } from "@/lib/local-db/dates";
+import { newEntityId } from "@/lib/local-db/ids";
+import { requireLocalDb } from "@/lib/local-db/db";
+import { writeOutboxOp } from "@/lib/local-db/outbox";
+import { requestSync } from "@/lib/local-db/sync-scheduler";
+import type { ExpenseRow } from "@/lib/local-db/types";
 
-function expensesCollection(uid: string) {
-  return collection(firestore, "users", uid, "expenses");
-}
-
-function toDate(value: unknown): Date {
-  if (value instanceof Timestamp) return value.toDate();
-  if (value instanceof Date) return value;
-  if (typeof value === "string" || typeof value === "number") {
-    return new Date(value);
-  }
-  return new Date();
-}
-
-function mapEntry(id: string, data: DocumentData): MoneyEntry {
-  const type: MoneyEntryType =
-    data.type === "income" ? "income" : "expense";
+function rowToEntry(row: ExpenseRow): MoneyEntry {
   return {
-    id,
-    title: String(data.title ?? ""),
-    category: String(data.category ?? ""),
-    amount: Number(data.amount ?? 0),
-    type,
-    occurredAt: toDate(data.occurredAt),
-    note: data.note ? String(data.note) : undefined,
-    createdAt: toDate(data.createdAt),
-    updatedAt: toDate(data.updatedAt),
+    id: row.id,
+    title: row.title,
+    category: row.category,
+    amount: row.amount,
+    type: row.type,
+    occurredAt: fromIso(row.occurredAt),
+    note: row.note ?? undefined,
+    createdAt: fromIso(row.createdAt),
+    updatedAt: fromIso(row.updatedAt),
   };
 }
 
 export async function getExpenses(uid: string): Promise<MoneyEntry[]> {
-  const snapshot = await getDocs(
-    query(expensesCollection(uid), orderBy("occurredAt", "desc")),
-  );
-  return snapshot.docs.map((d) => mapEntry(d.id, d.data()));
+  const db = requireLocalDb(uid);
+  const rows = await db.expenses.orderBy("occurredAt").reverse().toArray();
+  return rows.map(rowToEntry);
 }
 
 export async function addExpense(
   uid: string,
   input: MoneyEntryInput,
 ): Promise<MoneyEntry> {
-  const now = serverTimestamp();
-  const payload = {
+  const db = requireLocalDb(uid);
+  const id = newEntityId();
+  const createdAt = nowIso();
+  const row: ExpenseRow = {
+    id,
     title: input.title.trim(),
     category: input.category.trim(),
     amount: input.amount,
     type: input.type,
-    occurredAt: Timestamp.fromDate(input.occurredAt),
-    ...(input.note?.trim() ? { note: input.note.trim() } : {}),
-    createdAt: now,
-    updatedAt: now,
-  };
-  const ref = await addDoc(expensesCollection(uid), payload);
-  const createdAt = new Date();
-  return {
-    id: ref.id,
-    title: input.title.trim(),
-    category: input.category.trim(),
-    amount: input.amount,
-    type: input.type,
-    occurredAt: input.occurredAt,
-    note: input.note?.trim() || undefined,
+    occurredAt: toIso(input.occurredAt),
+    note: input.note?.trim() || null,
     createdAt,
     updatedAt: createdAt,
   };
+
+  await db.transaction("rw", db.expenses, db.outbox, async () => {
+    await db.expenses.add(row);
+    await writeOutboxOp(uid, "expenses", id, "upsert", null);
+  });
+  requestSync();
+
+  return rowToEntry(row);
 }
 
 export async function updateExpense(
@@ -89,20 +62,33 @@ export async function updateExpense(
   id: string,
   patch: Partial<MoneyEntryInput>,
 ): Promise<void> {
-  const updates: DocumentData = { updatedAt: serverTimestamp() };
-  if (patch.title !== undefined) updates.title = patch.title.trim();
-  if (patch.category !== undefined) updates.category = patch.category.trim();
-  if (patch.amount !== undefined) updates.amount = patch.amount;
-  if (patch.type !== undefined) updates.type = patch.type;
-  if (patch.occurredAt !== undefined) {
-    updates.occurredAt = Timestamp.fromDate(patch.occurredAt);
-  }
-  if (patch.note !== undefined) {
-    updates.note = patch.note.trim() || null;
-  }
-  await updateDoc(doc(firestore, "users", uid, "expenses", id), updates);
+  const db = requireLocalDb(uid);
+  const existing = await db.expenses.get(id);
+  if (!existing) return;
+
+  const next: ExpenseRow = {
+    ...existing,
+    updatedAt: nowIso(),
+  };
+  if (patch.title !== undefined) next.title = patch.title.trim();
+  if (patch.category !== undefined) next.category = patch.category.trim();
+  if (patch.amount !== undefined) next.amount = patch.amount;
+  if (patch.type !== undefined) next.type = patch.type;
+  if (patch.occurredAt !== undefined) next.occurredAt = toIso(patch.occurredAt);
+  if (patch.note !== undefined) next.note = patch.note.trim() || null;
+
+  await db.transaction("rw", db.expenses, db.outbox, async () => {
+    await db.expenses.put(next);
+    await writeOutboxOp(uid, "expenses", id, "upsert", null);
+  });
+  requestSync();
 }
 
 export async function deleteExpense(uid: string, id: string): Promise<void> {
-  await deleteDoc(doc(firestore, "users", uid, "expenses", id));
+  const db = requireLocalDb(uid);
+  await db.transaction("rw", db.expenses, db.outbox, async () => {
+    await db.expenses.delete(id);
+    await writeOutboxOp(uid, "expenses", id, "delete", null);
+  });
+  requestSync();
 }

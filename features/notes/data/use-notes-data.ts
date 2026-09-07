@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/firebase/auth-context";
+import { useLocalDb } from "@/lib/local-db/local-db-provider";
 import {
   addNoteFolder,
   deleteNoteFolder,
@@ -24,6 +25,7 @@ type NotePatch = Partial<Omit<Note, "id" | "createdAt" | "deletedAt">>;
 
 export function useNotesData() {
   const { user } = useAuth();
+  const { ready: localReady, error: localError } = useLocalDb();
   const uid = user?.uid;
 
   const [notes, setNotes] = useState<Note[]>([]);
@@ -76,7 +78,6 @@ export function useNotesData() {
         clearTimeout(timer);
       }
       timers.clear();
-      // Best-effort flush on unmount (fire-and-forget)
       const currentUid = uidRef.current;
       if (!currentUid) return;
       for (const [id, patch] of patches.entries()) {
@@ -105,6 +106,12 @@ export function useNotesData() {
         return;
       }
 
+      if (!localReady) {
+        setLoading(true);
+        if (localError) setError(localError);
+        return;
+      }
+
       try {
         const [nextNotes, nextFolders] = await Promise.all([
           getNotes(uid),
@@ -128,7 +135,7 @@ export function useNotesData() {
     return () => {
       cancelled = true;
     };
-  }, [uid, reloadToken]);
+  }, [uid, reloadToken, localReady, localError]);
 
   const addNote = useCallback(
     async (

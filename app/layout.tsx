@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/lib/firebase/auth-context";
+import { LocalDbProvider } from "@/lib/local-db/local-db-provider";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { ThemeScript } from "@/components/theme/theme-script";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -52,7 +53,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <ThemeScript />
         <ThemeProvider>
           <AuthProvider>
-            <TooltipProvider>{children}</TooltipProvider>
+            <LocalDbProvider>
+              <TooltipProvider>{children}</TooltipProvider>
+            </LocalDbProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

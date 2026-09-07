@@ -1,16 +1,3 @@
-import {
-  addDoc,
-  collection,
-  doc,
-  getDocs,
-  orderBy,
-  query,
-  serverTimestamp,
-  Timestamp,
-  updateDoc,
-  type DocumentData,
-} from "firebase/firestore";
-import { firestore } from "@/lib/firebase/client";
 import { NOTE_COLORS } from "@/features/notes/data/notes";
 import type {
   ChecklistItem,
@@ -19,131 +6,112 @@ import type {
   NoteInput,
   NoteType,
 } from "@/features/notes/data/types";
+import { fromIso, fromIsoOrNull, nowIso } from "@/lib/local-db/dates";
+import { newEntityId } from "@/lib/local-db/ids";
+import { requireLocalDb } from "@/lib/local-db/db";
+import { writeOutboxOp } from "@/lib/local-db/outbox";
+import { requestSync } from "@/lib/local-db/sync-scheduler";
+import type { NoteRow } from "@/lib/local-db/types";
 
-function notesCollection(uid: string) {
-  return collection(firestore, "users", uid, "notes");
-}
-
-function toDate(value: unknown): Date {
-  if (value instanceof Timestamp) return value.toDate();
-  if (value instanceof Date) return value;
-  if (typeof value === "string" || typeof value === "number") {
-    return new Date(value);
-  }
-  return new Date();
-}
-
-function toDateOrNull(value: unknown): Date | null {
-  if (value == null) return null;
-  return toDate(value);
-}
-
-function mapColor(value: unknown): NoteColor {
-  const color = String(value ?? "default");
-  return (NOTE_COLORS as string[]).includes(color)
-    ? (color as NoteColor)
+function mapColor(value: string): NoteColor {
+  return (NOTE_COLORS as string[]).includes(value)
+    ? (value as NoteColor)
     : "default";
 }
 
-function mapItems(value: unknown): ChecklistItem[] {
-  if (!Array.isArray(value)) return [];
-  return value.map((raw, index) => {
-    const item = raw as Record<string, unknown>;
-    return {
-      id: String(item.id ?? `item-${index}`),
-      text: String(item.text ?? ""),
-      done: Boolean(item.done),
-    };
-  });
+function mapItems(itemsJson: string): ChecklistItem[] {
+  try {
+    const raw = JSON.parse(itemsJson) as unknown;
+    if (!Array.isArray(raw)) return [];
+    return raw.map((item, index) => {
+      const row = item as Record<string, unknown>;
+      return {
+        id: String(row.id ?? `item-${index}`),
+        text: String(row.text ?? ""),
+        done: Boolean(row.done),
+      };
+    });
+  } catch {
+    return [];
+  }
 }
 
-function mapNote(id: string, data: DocumentData): Note {
-  const type: NoteType = data.type === "checklist" ? "checklist" : "text";
+function serializeItems(items: ChecklistItem[]): string {
+  return JSON.stringify(
+    items.map((item) => ({
+      id: item.id,
+      text: item.text,
+      done: item.done,
+    })),
+  );
+}
+
+function rowToNote(row: NoteRow): Note {
   return {
-    id,
-    title:
-      data.title == null || data.title === ""
-        ? null
-        : String(data.title),
-    type,
-    body: String(data.body ?? ""),
-    items: mapItems(data.items),
-    color: mapColor(data.color),
-    folderId: data.folderId ? String(data.folderId) : null,
-    pinned: Boolean(data.pinned),
-    deletedAt: toDateOrNull(data.deletedAt),
-    createdAt: toDate(data.createdAt),
-    updatedAt: toDate(data.updatedAt),
+    id: row.id,
+    title: row.title,
+    type: row.type,
+    body: row.body,
+    items: mapItems(row.itemsJson),
+    color: mapColor(row.color),
+    folderId: row.folderId,
+    pinned: Boolean(row.pinned),
+    deletedAt: fromIsoOrNull(row.deletedAt),
+    createdAt: fromIso(row.createdAt),
+    updatedAt: fromIso(row.updatedAt),
   };
 }
 
-function serializeItems(items: ChecklistItem[]) {
-  return items.map((item) => ({
-    id: item.id,
-    text: item.text,
-    done: item.done,
-  }));
-}
-
-/** Active notes only (`deletedAt` null / missing). */
+/** Active notes only (`deletedAt` null). */
 export async function getNotes(uid: string): Promise<Note[]> {
-  const snapshot = await getDocs(
-    query(notesCollection(uid), orderBy("updatedAt", "desc")),
-  );
-  return snapshot.docs
-    .map((d) => mapNote(d.id, d.data()))
-    .filter((note) => note.deletedAt == null);
+  const db = requireLocalDb(uid);
+  const rows = await db.notes.orderBy("updatedAt").reverse().toArray();
+  return rows.filter((row) => row.deletedAt == null).map(rowToNote);
 }
 
 /** All notes including soft-deleted (for future trash). */
 export async function getAllNotes(uid: string): Promise<Note[]> {
-  const snapshot = await getDocs(
-    query(notesCollection(uid), orderBy("updatedAt", "desc")),
-  );
-  return snapshot.docs.map((d) => mapNote(d.id, d.data()));
+  const db = requireLocalDb(uid);
+  const rows = await db.notes.orderBy("updatedAt").reverse().toArray();
+  return rows.map(rowToNote);
 }
 
 export async function addNote(
   uid: string,
   input: NoteInput,
 ): Promise<Note> {
-  const now = serverTimestamp();
-  const title =
-    input.title?.trim() ? input.title.trim() : null;
-  const type = input.type;
+  const db = requireLocalDb(uid);
+  const id = newEntityId();
+  const createdAt = nowIso();
+  const title = input.title?.trim() ? input.title.trim() : null;
+  const type: NoteType = input.type;
   const body = input.body ?? "";
   const items = input.items ?? [];
   const color = input.color ?? "default";
   const folderId = input.folderId ?? null;
   const pinned = input.pinned ?? false;
 
-  const ref = await addDoc(notesCollection(uid), {
+  const row: NoteRow = {
+    id,
     title,
     type,
     body,
-    items: serializeItems(items),
+    itemsJson: serializeItems(items),
     color,
     folderId,
-    pinned,
-    deletedAt: null,
-    createdAt: now,
-    updatedAt: now,
-  });
-
-  const createdAt = new Date();
-  return {
-    id: ref.id,
-    title,
-    type,
-    body,
-    items,
-    color,
-    folderId,
-    pinned,
+    pinned: pinned ? 1 : 0,
     deletedAt: null,
     createdAt,
     updatedAt: createdAt,
   };
+
+  await db.transaction("rw", db.notes, db.outbox, async () => {
+    await db.notes.add(row);
+    await writeOutboxOp(uid, "notes", id, "upsert", null);
+  });
+  requestSync();
+
+  return rowToNote(row);
 }
 
 export async function updateNote(
@@ -151,49 +119,94 @@ export async function updateNote(
   id: string,
   patch: Partial<Omit<Note, "id" | "createdAt" | "deletedAt">>,
 ): Promise<void> {
-  const updates: DocumentData = { updatedAt: serverTimestamp() };
+  const db = requireLocalDb(uid);
+  const existing = await db.notes.get(id);
+  if (!existing) return;
+
+  const updatedAt = nowIso();
+  const next: NoteRow = {
+    ...existing,
+    updatedAt,
+  };
 
   if (patch.title !== undefined) {
-    updates.title = patch.title?.trim() ? patch.title.trim() : null;
+    next.title = patch.title?.trim() ? patch.title.trim() : null;
   }
-  if (patch.type !== undefined) updates.type = patch.type;
-  if (patch.body !== undefined) updates.body = patch.body;
-  if (patch.items !== undefined) updates.items = serializeItems(patch.items);
-  if (patch.color !== undefined) updates.color = patch.color;
-  if (patch.folderId !== undefined) updates.folderId = patch.folderId;
-  if (patch.pinned !== undefined) updates.pinned = patch.pinned;
+  if (patch.type !== undefined) next.type = patch.type;
+  if (patch.body !== undefined) next.body = patch.body;
+  if (patch.items !== undefined) next.itemsJson = serializeItems(patch.items);
+  if (patch.color !== undefined) next.color = patch.color;
+  if (patch.folderId !== undefined) next.folderId = patch.folderId;
+  if (patch.pinned !== undefined) next.pinned = patch.pinned ? 1 : 0;
 
-  await updateDoc(doc(firestore, "users", uid, "notes", id), updates);
+  await db.transaction("rw", db.notes, db.outbox, async () => {
+    await db.notes.put(next);
+    await writeOutboxOp(uid, "notes", id, "upsert", null);
+  });
+  requestSync();
 }
 
-/** Soft delete â€” sets `deletedAt`; never removes the document. */
+/** Soft delete — sets `deletedAt`; never removes the document. */
 export async function softDeleteNote(uid: string, id: string): Promise<void> {
-  await updateDoc(doc(firestore, "users", uid, "notes", id), {
-    deletedAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+  const db = requireLocalDb(uid);
+  const existing = await db.notes.get(id);
+  if (!existing) return;
+
+  const updatedAt = nowIso();
+  const next: NoteRow = {
+    ...existing,
+    deletedAt: updatedAt,
+    updatedAt,
+  };
+
+  await db.transaction("rw", db.notes, db.outbox, async () => {
+    await db.notes.put(next);
+    await writeOutboxOp(uid, "notes", id, "upsert", null);
   });
+  requestSync();
 }
 
 /** Restore from trash (no UI yet). */
 export async function restoreNote(uid: string, id: string): Promise<void> {
-  await updateDoc(doc(firestore, "users", uid, "notes", id), {
+  const db = requireLocalDb(uid);
+  const existing = await db.notes.get(id);
+  if (!existing) return;
+
+  const updatedAt = nowIso();
+  const next: NoteRow = {
+    ...existing,
     deletedAt: null,
-    updatedAt: serverTimestamp(),
+    updatedAt,
+  };
+
+  await db.transaction("rw", db.notes, db.outbox, async () => {
+    await db.notes.put(next);
+    await writeOutboxOp(uid, "notes", id, "upsert", null);
   });
+  requestSync();
 }
 
 /** Clear folderId on active notes that referenced a deleted folder. */
 export async function clearNotesFolder(
   uid: string,
-  folderId: string,
+  _folderId: string,
   noteIds: string[],
 ): Promise<void> {
-  await Promise.all(
-    noteIds.map((id) =>
-      updateDoc(doc(firestore, "users", uid, "notes", id), {
+  const db = requireLocalDb(uid);
+  const updatedAt = nowIso();
+
+  await db.transaction("rw", db.notes, db.outbox, async () => {
+    for (const id of noteIds) {
+      const existing = await db.notes.get(id);
+      if (!existing) continue;
+      const next: NoteRow = {
+        ...existing,
         folderId: null,
-        updatedAt: serverTimestamp(),
-      }),
-    ),
-  );
+        updatedAt,
+      };
+      await db.notes.put(next);
+      await writeOutboxOp(uid, "notes", id, "upsert", null);
+    }
+  });
+  requestSync();
 }

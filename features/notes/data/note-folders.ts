@@ -1,66 +1,48 @@
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  orderBy,
-  query,
-  serverTimestamp,
-  Timestamp,
-  updateDoc,
-  type DocumentData,
-} from "firebase/firestore";
-import { firestore } from "@/lib/firebase/client";
 import type { NoteFolder, NoteFolderInput } from "@/features/notes/data/types";
+import { fromIso, nowIso } from "@/lib/local-db/dates";
+import { newEntityId } from "@/lib/local-db/ids";
+import { requireLocalDb } from "@/lib/local-db/db";
+import { writeOutboxOp } from "@/lib/local-db/outbox";
+import { requestSync } from "@/lib/local-db/sync-scheduler";
+import type { NoteFolderRow } from "@/lib/local-db/types";
 
-function noteFoldersCollection(uid: string) {
-  return collection(firestore, "users", uid, "noteFolders");
-}
-
-function toDate(value: unknown): Date {
-  if (value instanceof Timestamp) return value.toDate();
-  if (value instanceof Date) return value;
-  if (typeof value === "string" || typeof value === "number") {
-    return new Date(value);
-  }
-  return new Date();
-}
-
-function mapFolder(id: string, data: DocumentData): NoteFolder {
+function rowToFolder(row: NoteFolderRow): NoteFolder {
   return {
-    id,
-    name: String(data.name ?? ""),
-    createdAt: toDate(data.createdAt),
-    updatedAt: toDate(data.updatedAt),
+    id: row.id,
+    name: row.name,
+    createdAt: fromIso(row.createdAt),
+    updatedAt: fromIso(row.updatedAt),
   };
 }
 
 export async function getNoteFolders(uid: string): Promise<NoteFolder[]> {
-  const snapshot = await getDocs(
-    query(noteFoldersCollection(uid), orderBy("name", "asc")),
-  );
-  return snapshot.docs.map((d) => mapFolder(d.id, d.data()));
+  const db = requireLocalDb(uid);
+  const rows = await db.noteFolders.orderBy("name").toArray();
+  return rows.map(rowToFolder);
 }
 
 export async function addNoteFolder(
   uid: string,
   input: NoteFolderInput,
 ): Promise<NoteFolder> {
+  const db = requireLocalDb(uid);
+  const id = newEntityId();
+  const createdAt = nowIso();
   const name = input.name.trim();
-  const now = serverTimestamp();
-  const ref = await addDoc(noteFoldersCollection(uid), {
-    name,
-    createdAt: now,
-    updatedAt: now,
-  });
-  const createdAt = new Date();
-  return {
-    id: ref.id,
+  const row: NoteFolderRow = {
+    id,
     name,
     createdAt,
     updatedAt: createdAt,
   };
+
+  await db.transaction("rw", db.noteFolders, db.outbox, async () => {
+    await db.noteFolders.add(row);
+    await writeOutboxOp(uid, "noteFolders", id, "upsert", null);
+  });
+  requestSync();
+
+  return rowToFolder(row);
 }
 
 export async function updateNoteFolder(
@@ -68,12 +50,29 @@ export async function updateNoteFolder(
   id: string,
   patch: Partial<NoteFolderInput>,
 ): Promise<void> {
-  const updates: DocumentData = { updatedAt: serverTimestamp() };
-  if (patch.name !== undefined) updates.name = patch.name.trim();
-  await updateDoc(doc(firestore, "users", uid, "noteFolders", id), updates);
+  const db = requireLocalDb(uid);
+  const existing = await db.noteFolders.get(id);
+  if (!existing) return;
+
+  const next: NoteFolderRow = {
+    ...existing,
+    updatedAt: nowIso(),
+  };
+  if (patch.name !== undefined) next.name = patch.name.trim();
+
+  await db.transaction("rw", db.noteFolders, db.outbox, async () => {
+    await db.noteFolders.put(next);
+    await writeOutboxOp(uid, "noteFolders", id, "upsert", null);
+  });
+  requestSync();
 }
 
 /** Hard delete folder document. */
 export async function deleteNoteFolder(uid: string, id: string): Promise<void> {
-  await deleteDoc(doc(firestore, "users", uid, "noteFolders", id));
+  const db = requireLocalDb(uid);
+  await db.transaction("rw", db.noteFolders, db.outbox, async () => {
+    await db.noteFolders.delete(id);
+    await writeOutboxOp(uid, "noteFolders", id, "delete", null);
+  });
+  requestSync();
 }

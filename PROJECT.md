@@ -25,7 +25,7 @@ Tone: personal, calm, simple, slightly playful, premium but not flashy. Not a co
 - Give Budget a dedicated visual page as the first “real” module surface
 - Keep every other module reachable via a reusable Coming Soon experience
 - Make adding the next module cheap and consistent
-- Introduce Firebase (Auth + Firestore) as the backend, accessed via a dedicated data layer, not ad hoc calls in components
+- Introduce Firebase Auth + Firestore cloud backup, with Dexie as the on-device source of truth for product data
 - Support multiple users with per-account data isolation
 
 ### Non-goals (hard constraints for now)
@@ -58,6 +58,8 @@ flowchart LR
   Browser[Browser]
   NextApp[Next.js App Router UI]
   DataLayer["features/*/data repository layer"]
+  LocalDb["Dexie IndexedDB lib/local-db"]
+  SyncWorker[Outbox sync worker]
   RouteHandlers["app/api Route Handlers"]
   FirebaseAuth[Firebase Auth]
   Firestore[Cloud Firestore]
@@ -69,15 +71,17 @@ flowchart LR
   NextApp --> DataLayer
   NextApp --> Mock
   NextApp --> ThemeStore
+  DataLayer --> LocalDb
   DataLayer --> FirebaseAuth
-  DataLayer --> Firestore
+  LocalDb --> SyncWorker
+  SyncWorker --> Firestore
   DataLayer --> RouteHandlers
   RouteHandlers --> Firestore
 ```
 
 **Not in the system (yet):** a separate backend service, third-party analytics, queues / cron workers.
 
-**Stack (for orientation):** Next.js 16 App Router, React 19, TypeScript, Tailwind CSS v4, shadcn/ui, Lucide icons, Firebase (Auth, Cloud Firestore), Firebase Admin SDK for Route Handlers. Deploy target: Vercel.
+**Stack (for orientation):** Next.js 16 App Router, React 19, TypeScript, Tailwind CSS v4, shadcn/ui, Lucide icons, Dexie (IndexedDB), Firebase (Auth, Cloud Firestore), Firebase Admin SDK for Route Handlers. Deploy target: Vercel.
 
 ---
 
@@ -131,31 +135,31 @@ Use these when planning work. They describe maturity, not just “done / not don
 | `coming-soon` | Route exists; reusable Coming Soon UI only |
 | `ui-shell` | Real page structure + static/demo data; no real logic |
 | `client-logic` | Interactive behavior in the browser; still no durable storage (or ephemeral only) |
-| `persisted` | Durable storage via the data layer (Firestore, or local when intentionally chosen) |
-| `synced` | Optional cloud sync (future; definition needs revisit now that persistence is cloud-backed — see §13) |
+| `persisted` | Durable on-device storage via Dexie (`lib/local-db`) through `features/<name>/data/*` |
+| `synced` | Local durable data with outbox drained to Cloud Firestore (cloud backup / multi-device replica) |
 
 ### Module catalog (shipped codebase)
 
 | Module | Category | Route | Lifecycle |
 |--------|----------|-------|-----------|
 | Home (dashboard) | Shell | `/` | `ui-shell` (mock overview) |
-| Budget | Finance | `/budget` | `persisted` (calendar month + quick spend) |
+| Budget | Finance | `/budget` | `synced` (Dexie + Firestore outbox) |
 | Expenses | Finance | `/expenses` | `coming-soon` |
 | Bills | Finance | `/bills` | `coming-soon` |
 | Savings | Finance | `/savings` | `coming-soon` |
 | Tasks | Personal | `/tasks` | `coming-soon` |
 | Goals | Personal | `/goals` | `coming-soon` |
 | Planner | Personal | `/planner` | `coming-soon` |
-| Notes | Personal | `/notes` | `persisted` |
+| Notes | Personal | `/notes` | `synced` (Dexie + Firestore outbox) |
 | Calculator | Tools | `/calculator` | `coming-soon` |
 | Converter | Tools | `/converter` | `coming-soon` |
 | More | Shell | `/more` | Done (catalog UI) |
 | Activity | Shell | `/activity` | `ui-shell` (mock feed) |
-| Settings | Shell | `/settings` | Partial (theme + about real; other rows placeholder) |
+| Settings | Shell | `/settings` | Partial (theme, about, sync status; other rows placeholder) |
 
 Live registry (icons, descriptions, hrefs, `available` | `coming-soon`): [`lib/modules.ts`](lib/modules.ts).
 
-> **Note:** The `synced` lifecycle state originally meant “optional cloud sync after local-first.” With Firestore as the persistence layer, that meaning is under review (see §13) — do not silently redefine it in PRs.
+> **`synced`:** UI writes Dexie first; a background outbox pushes to `users/{uid}/…` in Firestore. No Dexie Cloud — sync is app-owned against Firebase.
 
 ---
 
@@ -191,16 +195,17 @@ Rules for planners and implementers (tokens live in [`app/globals.css`](app/glob
 
 ## 9. Data strategy
 
-Firebase is the backend for product data. Frontend and Route Handlers share one Next.js app; all Firestore access goes through a dedicated repository layer.
+Product data is **local-first**: Dexie (IndexedDB) is the source of truth for Notes and Budget. Cloud Firestore is the backup / multi-device replica, reached only through the shared sync worker (`lib/local-db`).
 
 | Concern | Approach |
 |---------|----------|
 | **Identity** | Firebase Auth — multi-user accounts with per-user data isolation |
-| **Persistence** | Cloud Firestore — documents scoped to the authenticated user |
-| **Repository layer** | [`features/<name>/data/*`](features) wraps every Firestore read/write; pages and feature components never import the Firebase SDK directly |
-| **Client SDK** | Reads and user-scoped operations only, enforced by Firestore Security Rules |
+| **Local persistence** | Dexie databases named `lifekit-${uid}` via [`lib/local-db`](lib/local-db) |
+| **Cloud backup** | Cloud Firestore under `users/{uid}/…`; outbox push + pull merge (LWW on `updatedAt`) |
+| **Repository layer** | [`features/<name>/data/*`](features) reads/writes Dexie; pages never import Firebase or Dexie directly |
+| **Sync** | Outbox ops + background worker; status on Settings → Sync. **No Dexie Cloud** |
 | **Admin / sensitive writes** | Next.js Route Handlers (`app/api/**/route.ts`) using the Firebase Admin SDK (server-only credentials; never shipped to the browser) |
-| **Transitional mocks** | Static mocks in [`lib/mock-data.ts`](lib/mock-data.ts) remain for modules not yet on Firestore; formatters stay in [`lib/format.ts`](lib/format.ts) |
+| **Transitional mocks** | Static mocks in [`lib/mock-data.ts`](lib/mock-data.ts) remain for modules not yet on the local-db path; formatters stay in [`lib/format.ts`](lib/format.ts) |
 
 **Currency display today:** amounts are shown as `Rs 250,000` using Western thousands grouping (`en-US` + `Rs` prefix) so UI matches product examples. Broader locale strategy is an open question (see §13).
 
@@ -220,7 +225,7 @@ Firebase is the backend for product data. Frontend and Route Handlers share one 
 
 1. Keep the existing page structure under `features/budget/components/*` as the visual frame
 2. Introduce client state / forms (`client-logic`)
-3. Persist via the `features/budget/data/*` repository layer against Firestore (`persisted`)
+3. Persist via the `features/budget/data/*` repository layer (Dexie + outbox sync → `synced`)
 4. Escalate sensitive writes to Route Handlers + Admin SDK when needed
 
 ### Add Firebase-backed persistence to a module
@@ -262,7 +267,7 @@ Any planned change should still satisfy:
 
 1. **Budget `client-logic`** — real interactions on the existing shell; still may use in-memory or mock seed data
 2. **Expenses flow** — replace Coming Soon; wire quick action “Add Expense” (`client-logic`)
-3. **Firestore persistence** — `features/<name>/data/*` repository layer for Budget (and later finance / tasks / notes)
+3. **Local-first + cloud sync** — Dexie via `lib/local-db`; `features/<name>/data/*` for Budget and Notes (outbox → Firestore)
 4. **Tasks / Notes** — lightweight tools behind the same per-feature data layer
 5. **PWA install polish** — raster icons, optional service worker
 6. **Optional export / collaboration** — only after auth + per-user isolation are solid (see §13)
@@ -293,12 +298,10 @@ Any planned change should still satisfy:
 Decisions not finalized — do not invent silent answers in PRs:
 
 - Long-term **currency / locale** model (PKR display vs full `en-PK` grouping vs multi-currency)
-- Whether **offline / installability** is required for v1 of real Budget
 - How **income** should be entered long-term (dedicated flow vs typed money entries as today)
 - How **Activity** should aggregate once multiple modules write real events
-- What the **`synced` lifecycle state** means now that persistence is already cloud-backed (**TODO: undecided**)
-- **Offline behaviour** and reliance on Firestore’s local cache vs a deliberate offline strategy (**TODO: undecided**)
 - Whether other users’ data is ever **shared / collaborative**, or always strictly private (**TODO: undecided**)
+- Whether **installability / PWA** is required beyond browser IndexedDB offline
 
 **Resolved here:**
 
@@ -306,6 +309,8 @@ Decisions not finalized — do not invent silent answers in PRs:
 - **Firebase Auth providers** — email/password as the baseline; Google and others deferred
 - **Budget month model** — calendar month; stable category limits; spend filtered by `occurredAt`; past months on Budget; Home = current month
 - **Budget UX** — tap category → quick-spend sheet (remaining / presets / custom / Mark paid for fixed); Manage categories under `/budget/manage`; bottom + → Add Expense opens category picker on Budget
+- **`synced` lifecycle** — local Dexie durable + outbox drained to Firestore
+- **Offline strategy** — Dexie primary; Firestore is replica (not Firestore SDK offline cache)
 
 **Decided (see §14):** multi-user Firebase Auth accounts with per-user data isolation — the product is open to other people, not device-local indefinitely.
 
@@ -323,8 +328,9 @@ Decisions not finalized — do not invent silent answers in PRs:
 | Coming Soon is one component | Avoid nine copy-pasted placeholders | Thin route files per module |
 | `typedRoutes: true` | Catch broken hrefs at compile time | Registry hrefs must be real routes |
 | shadcn primitives added early | Faster future module UI | Prefer existing `components/ui/*` |
-| Firebase for backend | Needed real persistence + auth beyond local-first stage | Introduces external service dependency, requires API keys/env config, Firestore schema design |
-| `features/<name>/data/*` wraps all Firestore access | Keep feature UI clean, allow future backend swap | New modules must go through their feature repository, not raw SDK calls |
+| Firebase for backend | Needed real auth + cloud backup beyond device-only stage | Introduces external service dependency, requires API keys/env config, Firestore schema design |
+| Dexie local-first + Firestore outbox | Snappy offline UX; cloud as replica | App owns sync; per-uid IndexedDB; no Dexie Cloud |
+| `features/<name>/data/*` wraps all product data access | Keep feature UI clean, allow storage backend swap | New modules must go through their feature repository, not raw SDK calls |
 | Feature folders under `features/` | Clear ownership for open-source contributors; no Budget↔Notes coupling | Co-locate components + data + README; ESLint blocks cross-feature imports |
 | Multi-user Auth accounts | Product is open to other people; each user’s data is isolated | Requires Auth UI, Security Rules, and user-scoped repository APIs |
 | `users/{uid}/…` subcollections | Simpler Security Rules and clear per-user isolation vs top-level + `userId` field | All module data lives under the user doc path; collections include `budget`, `expenses`, `notes`, `noteFolders` |
@@ -336,7 +342,7 @@ Decisions not finalized — do not invent silent answers in PRs:
 | `isFixed` on budget categories | Rent-style full monthly payments | Manage toggle; Mark paid writes expense = limit |
 | Manage under Budget | Setup separate from day-to-day logging | `/budget/manage` for add/edit/delete/fixed; no admin mode |
 | Home Financial overview live | Remove demo budget card | `useBudgetData` + this-month `deriveBudgetSummary` |
-| Notes Firestore + soft delete | Durable notes with future trash | Collections `notes` + `noteFolders` under `users/{uid}`; notes use `deletedAt` (never hard-deleted); Trash UI deferred; folder delete is hard and clears `folderId` on active notes |
+| Notes Dexie + Firestore sync + soft delete | Durable notes with future trash | Local Dexie + collections `notes` / `noteFolders` under `users/{uid}`; notes use `deletedAt` (never hard-deleted); Trash UI deferred; folder delete is hard and clears `folderId` on active notes |
 
 ---
 

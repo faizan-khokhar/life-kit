@@ -1,17 +1,3 @@
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  orderBy,
-  query,
-  serverTimestamp,
-  Timestamp,
-  updateDoc,
-  type DocumentData,
-} from "firebase/firestore";
-import { firestore } from "@/lib/firebase/client";
 import type {
   BudgetCategory,
   BudgetCategoryInput,
@@ -21,62 +7,56 @@ import type {
   MoneyEntry,
   SpendingDayView,
 } from "@/features/budget/data/types";
+import { fromIso, nowIso } from "@/lib/local-db/dates";
+import { newEntityId } from "@/lib/local-db/ids";
+import { requireLocalDb } from "@/lib/local-db/db";
+import { writeOutboxOp } from "@/lib/local-db/outbox";
+import { requestSync } from "@/lib/local-db/sync-scheduler";
+import type { BudgetCategoryRow } from "@/lib/local-db/types";
 
-function budgetCollection(uid: string) {
-  return collection(firestore, "users", uid, "budget");
-}
-
-function toDate(value: unknown): Date {
-  if (value instanceof Timestamp) return value.toDate();
-  if (value instanceof Date) return value;
-  if (typeof value === "string" || typeof value === "number") {
-    return new Date(value);
-  }
-  return new Date();
-}
-
-function mapCategory(id: string, data: DocumentData): BudgetCategory {
+function rowToCategory(row: BudgetCategoryRow): BudgetCategory {
   return {
-    id,
-    name: String(data.name ?? ""),
-    limit: Number(data.limit ?? 0),
-    isFixed: Boolean(data.isFixed),
-    createdAt: toDate(data.createdAt),
-    updatedAt: toDate(data.updatedAt),
+    id: row.id,
+    name: row.name,
+    limit: row.limit,
+    isFixed: Boolean(row.isFixed),
+    createdAt: fromIso(row.createdAt),
+    updatedAt: fromIso(row.updatedAt),
   };
 }
 
 export async function getBudgetCategories(
   uid: string,
 ): Promise<BudgetCategory[]> {
-  const snapshot = await getDocs(
-    query(budgetCollection(uid), orderBy("name", "asc")),
-  );
-  return snapshot.docs.map((d) => mapCategory(d.id, d.data()));
+  const db = requireLocalDb(uid);
+  const rows = await db.budgetCategories.orderBy("name").toArray();
+  return rows.map(rowToCategory);
 }
 
 export async function addBudgetCategory(
   uid: string,
   input: BudgetCategoryInput,
 ): Promise<BudgetCategory> {
+  const db = requireLocalDb(uid);
+  const id = newEntityId();
+  const createdAt = nowIso();
   const isFixed = Boolean(input.isFixed);
-  const now = serverTimestamp();
-  const ref = await addDoc(budgetCollection(uid), {
+  const row: BudgetCategoryRow = {
+    id,
     name: input.name.trim(),
     limit: input.limit,
-    isFixed,
-    createdAt: now,
-    updatedAt: now,
-  });
-  const createdAt = new Date();
-  return {
-    id: ref.id,
-    name: input.name.trim(),
-    limit: input.limit,
-    isFixed,
+    isFixed: isFixed ? 1 : 0,
     createdAt,
     updatedAt: createdAt,
   };
+
+  await db.transaction("rw", db.budgetCategories, db.outbox, async () => {
+    await db.budgetCategories.add(row);
+    await writeOutboxOp(uid, "budget", id, "upsert", null);
+  });
+  requestSync();
+
+  return rowToCategory(row);
 }
 
 export async function updateBudgetCategory(
@@ -84,18 +64,35 @@ export async function updateBudgetCategory(
   id: string,
   patch: Partial<BudgetCategoryInput>,
 ): Promise<void> {
-  const updates: DocumentData = { updatedAt: serverTimestamp() };
-  if (patch.name !== undefined) updates.name = patch.name.trim();
-  if (patch.limit !== undefined) updates.limit = patch.limit;
-  if (patch.isFixed !== undefined) updates.isFixed = Boolean(patch.isFixed);
-  await updateDoc(doc(firestore, "users", uid, "budget", id), updates);
+  const db = requireLocalDb(uid);
+  const existing = await db.budgetCategories.get(id);
+  if (!existing) return;
+
+  const next: BudgetCategoryRow = {
+    ...existing,
+    updatedAt: nowIso(),
+  };
+  if (patch.name !== undefined) next.name = patch.name.trim();
+  if (patch.limit !== undefined) next.limit = patch.limit;
+  if (patch.isFixed !== undefined) next.isFixed = patch.isFixed ? 1 : 0;
+
+  await db.transaction("rw", db.budgetCategories, db.outbox, async () => {
+    await db.budgetCategories.put(next);
+    await writeOutboxOp(uid, "budget", id, "upsert", null);
+  });
+  requestSync();
 }
 
 export async function deleteBudgetCategory(
   uid: string,
   id: string,
 ): Promise<void> {
-  await deleteDoc(doc(firestore, "users", uid, "budget", id));
+  const db = requireLocalDb(uid);
+  await db.transaction("rw", db.budgetCategories, db.outbox, async () => {
+    await db.budgetCategories.delete(id);
+    await writeOutboxOp(uid, "budget", id, "delete", null);
+  });
+  requestSync();
 }
 
 /** Derive income / expense / remaining totals from money entries. */
@@ -122,7 +119,7 @@ const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 /**
  * Expense totals by day for the calendar month of `month`.
  * Days outside the month (or future days in the current month) are omitted
- * from the chart buckets â€” we chart each day that has spend or all days
+ * from the chart buckets — we chart each day that has spend or all days
  * up to today within the month when viewing the current month.
  */
 export function deriveSpendingByDay(
@@ -157,7 +154,6 @@ export function deriveSpendingByDay(
     buckets[idx]!.amount += entry.amount;
   }
 
-  // Compact chart: show weekday labels for last 7 days of the window when many days
   if (buckets.length > 10) {
     return buckets.slice(-7).map((b) => {
       const d = new Date(b.key);

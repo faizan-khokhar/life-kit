@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import { Bell, Cloud, Download, Shield } from "lucide-react";
+import { Bell, Download, Shield } from "lucide-react";
 import { AccountCard } from "@/components/auth/account-card";
 import { PageContainer } from "@/components/layout/page-container";
+import { SyncStatusRow } from "@/components/settings/sync-status-row";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -15,11 +16,6 @@ const comingSoonRows = [
     icon: Bell,
     title: "Notifications",
     description: "Reminders for bills and tasks",
-  },
-  {
-    icon: Cloud,
-    title: "Sync",
-    description: "Optional cloud backup later",
   },
   {
     icon: Download,
@@ -55,6 +51,19 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent>
             <ThemeToggle />
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/80 shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Data</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Notes and budget save on this device first, then back up to the
+              cloud.
+            </p>
+          </CardHeader>
+          <CardContent className="divide-y divide-border/70 p-0">
+            <SyncStatusRow />
           </CardContent>
         </Card>
 
