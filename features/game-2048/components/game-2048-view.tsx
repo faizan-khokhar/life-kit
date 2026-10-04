@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type TouchEvent } from "react";
-import { Undo2 } from "lucide-react";
+import { Pause, Play, Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -184,14 +184,28 @@ export function Game2048View() {
   const [pendingDifficulty, setPendingDifficulty] = useState<Difficulty | null>(
     null
   );
-  const [timerToken, setTimerToken] = useState(0);
+  const [paused, setPaused] = useState(false);
   const [msLeft, setMsLeft] = useState(HARDEST_MOVE_TIME_MS);
+
+  const stateRef = useRef<PlayState | null>(null);
+  const pausedRef = useRef(false);
+  const deadlineRef = useRef(Date.now() + HARDEST_MOVE_TIME_MS);
+  const frozenRemainingRef = useRef(HARDEST_MOVE_TIME_MS);
   const touchStart = useRef<TouchPoint | null>(null);
   const moveLockedUntil = useRef(0);
 
+  stateRef.current = state;
+  pausedRef.current = paused;
+
+  function armTimer(ms: number = HARDEST_MOVE_TIME_MS) {
+    const remaining = Math.max(0, Math.min(HARDEST_MOVE_TIME_MS, ms));
+    deadlineRef.current = Date.now() + remaining;
+    frozenRemainingRef.current = remaining;
+    setMsLeft(remaining);
+  }
+
   function resetTimer() {
-    setMsLeft(HARDEST_MOVE_TIME_MS);
-    setTimerToken((token) => token + 1);
+    armTimer(HARDEST_MOVE_TIME_MS);
   }
 
   useEffect(() => {
@@ -200,18 +214,25 @@ export function Game2048View() {
     const best = readBestScore(difficulty);
 
     if (saved) {
-      setState({
+      const next: PlayState = {
         tiles: boardToTiles(saved.board),
         score: saved.score,
         best: Math.max(best, saved.score),
         over: saved.over,
         difficulty: saved.difficulty,
         previous: saved.previous,
-      });
+      };
+      setState(next);
+      const shouldPause =
+        saved.difficulty === "hardest" && Boolean(saved.paused) && !saved.over;
+      setPaused(shouldPause);
+      armTimer(HARDEST_MOVE_TIME_MS);
       return;
     }
 
     setState(createFreshPlayState(best, "normal"));
+    setPaused(false);
+    resetTimer();
   }, []);
 
   useEffect(() => {
@@ -221,29 +242,34 @@ export function Game2048View() {
       score: state.score,
       over: state.over,
       difficulty: state.difficulty,
+      paused: state.difficulty === "hardest" ? paused : false,
       previous: state.previous,
     });
-  }, [state]);
+  }, [state, paused]);
 
+  // Hardest countdown — deadline ref is the source of truth so moves can reset it sync.
   useEffect(() => {
-    if (!state || state.difficulty !== "hardest" || state.over) return;
-
-    const startedAt = Date.now();
-    setMsLeft(HARDEST_MOVE_TIME_MS);
+    if (!state || state.difficulty !== "hardest" || state.over || paused) {
+      return;
+    }
 
     const id = window.setInterval(() => {
-      const left = Math.max(0, HARDEST_MOVE_TIME_MS - (Date.now() - startedAt));
+      const left = Math.max(0, deadlineRef.current - Date.now());
       setMsLeft(left);
 
       if (left <= 0) {
-        window.clearInterval(id);
-        setState((prev) => (prev ? applyTimeoutPenalty(prev) : prev));
-        setTimerToken((token) => token + 1);
+        const prev = stateRef.current;
+        if (prev && prev.difficulty === "hardest" && !prev.over) {
+          const next = applyTimeoutPenalty(prev);
+          stateRef.current = next;
+          setState(next);
+        }
+        armTimer(HARDEST_MOVE_TIME_MS);
       }
     }, 100);
 
     return () => window.clearInterval(id);
-  }, [state?.difficulty, state?.over, timerToken]);
+  }, [state?.difficulty, state?.over, paused]);
 
   function requestDifficultyChange(next: Difficulty) {
     if (!state || next === state.difficulty) return;
@@ -251,6 +277,7 @@ export function Game2048View() {
     if (!hasProgress(state)) {
       const best = readBestScore(next);
       setState(createFreshPlayState(best, next));
+      setPaused(false);
       resetTimer();
       return;
     }
@@ -263,44 +290,65 @@ export function Game2048View() {
     const best = readBestScore(pendingDifficulty);
     setState(createFreshPlayState(best, pendingDifficulty));
     setPendingDifficulty(null);
+    setPaused(false);
     resetTimer();
   }
 
+  function commitState(next: PlayState) {
+    stateRef.current = next;
+    setState(next);
+  }
+
   function handleUndo() {
-    let didUndo = false;
-    setState((prev) => {
-      if (!prev) return prev;
-      const next = undoLastMove(prev);
-      didUndo = next !== prev;
-      return next;
-    });
-    if (didUndo) resetTimer();
+    if (pausedRef.current) return;
+    const prev = stateRef.current;
+    if (!prev) return;
+    const next = undoLastMove(prev);
+    if (next === prev) return;
+    commitState(next);
+    resetTimer();
   }
 
   function startNewRun() {
-    let restarted = false;
-    setState((prev) => {
-      if (!prev?.over) return prev;
-      restarted = true;
-      return createFreshPlayState(prev.best, prev.difficulty);
-    });
-    if (restarted) resetTimer();
+    const prev = stateRef.current;
+    if (!prev?.over) return;
+    commitState(createFreshPlayState(prev.best, prev.difficulty));
+    setPaused(false);
+    resetTimer();
   }
 
   function applyMove(direction: Direction) {
+    if (pausedRef.current) return;
     if (Date.now() < moveLockedUntil.current) return;
 
-    let didMove = false;
-    setState((prev) => {
-      if (!prev) return prev;
-      const next = applyDirection(prev, direction);
-      if (next !== prev) {
-        moveLockedUntil.current = Date.now() + MOVE_LOCK_MS;
-        didMove = true;
-      }
-      return next;
-    });
-    if (didMove) resetTimer();
+    const prev = stateRef.current;
+    if (!prev) return;
+
+    const next = applyDirection(prev, direction);
+    if (next === prev) return;
+
+    moveLockedUntil.current = Date.now() + MOVE_LOCK_MS;
+    commitState(next);
+    resetTimer();
+  }
+
+  function pauseGame() {
+    const current = stateRef.current;
+    if (!current || current.difficulty !== "hardest" || current.over) return;
+    if (pausedRef.current) return;
+
+    frozenRemainingRef.current = Math.max(0, deadlineRef.current - Date.now());
+    setMsLeft(frozenRemainingRef.current);
+    setPaused(true);
+  }
+
+  function resumeGame() {
+    const current = stateRef.current;
+    if (!current || current.difficulty !== "hardest" || current.over) return;
+    if (!pausedRef.current) return;
+
+    armTimer(frozenRemainingRef.current || HARDEST_MOVE_TIME_MS);
+    setPaused(false);
   }
 
   useEffect(() => {
@@ -316,12 +364,14 @@ export function Game2048View() {
   }, []);
 
   function onTouchStart(event: TouchEvent) {
+    if (pausedRef.current) return;
     const touch = event.touches[0];
     if (!touch) return;
     touchStart.current = { x: touch.clientX, y: touch.clientY };
   }
 
   function onTouchEnd(event: TouchEvent) {
+    if (pausedRef.current) return;
     const start = touchStart.current;
     touchStart.current = null;
     if (!start) return;
@@ -359,9 +409,10 @@ export function Game2048View() {
   }
 
   const { tiles, score, best, over, previous, difficulty } = state;
-  const canUndo = previous !== null;
-  const showTimer = difficulty === "hardest" && !over;
-  const timerUrgent = showTimer && msLeft <= TIMER_URGENCY_MS;
+  const canUndo = previous !== null && !paused;
+  const isHardest = difficulty === "hardest";
+  const showTimer = isHardest && !over;
+  const timerUrgent = showTimer && !paused && msLeft <= TIMER_URGENCY_MS;
 
   return (
     <div className="mx-auto flex w-full max-w-sm flex-col gap-4">
@@ -428,19 +479,43 @@ export function Game2048View() {
       {showTimer ? (
         <div
           className={cn(
-            "flex items-center justify-between rounded-2xl px-4 py-2.5 ring-1",
+            "flex items-center justify-between gap-3 rounded-2xl px-4 py-2.5 ring-1",
             timerUrgent
               ? "bg-destructive/10 text-destructive ring-destructive/30"
               : "bg-card text-foreground ring-foreground/10"
           )}
           aria-live="polite"
         >
-          <span className="text-xs font-medium tracking-wide uppercase">
-            Move timer
-          </span>
-          <span className="font-heading text-xl font-semibold tabular-nums">
-            {formatCountdown(msLeft)}
-          </span>
+          <div className="min-w-0">
+            <p className="text-xs font-medium tracking-wide uppercase">
+              {paused ? "Paused" : "Move timer"}
+            </p>
+            <p className="font-heading text-xl font-semibold tabular-nums">
+              {formatCountdown(msLeft)}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={paused ? resumeGame : pauseGame}
+            className={cn(
+              "inline-flex shrink-0 items-center gap-1.5 rounded-2xl px-3 py-2 text-sm font-medium",
+              "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            )}
+            aria-label={paused ? "Resume game" : "Pause game"}
+          >
+            {paused ? (
+              <>
+                <Play className="size-3.5" />
+                Resume
+              </>
+            ) : (
+              <>
+                <Pause className="size-3.5" />
+                Pause
+              </>
+            )}
+          </button>
         </div>
       ) : null}
 
@@ -463,45 +538,71 @@ export function Game2048View() {
             ))}
           </div>
 
-          <div className="pointer-events-none absolute inset-2">
-            {tiles.map((tile) => (
-              <div
-                key={tile.id}
-                className={cn(
-                  "game-2048-tile absolute top-0 left-0",
-                  tile.isNew && "game-2048-tile-new",
-                  tile.isMerged && "game-2048-tile-merged"
-                )}
-                style={{
-                  width: `calc((100% - 3 * ${TILE_GAP}) / 4)`,
-                  height: `calc((100% - 3 * ${TILE_GAP}) / 4)`,
-                  transform: `translate(calc(${tile.col} * (100% + ${TILE_GAP})), calc(${tile.row} * (100% + ${TILE_GAP})))`,
-                  zIndex: tile.isMerged ? 3 : tile.isNew ? 2 : 1,
-                }}
-              >
-                <span
+          {!paused ? (
+            <div className="pointer-events-none absolute inset-2">
+              {tiles.map((tile) => (
+                <div
+                  key={tile.id}
                   className={cn(
-                    "flex h-full w-full items-center justify-center rounded-xl font-heading font-bold tabular-nums select-none",
-                    tileClass(tile.value),
-                    tileTextSize(tile.value)
+                    "game-2048-tile absolute top-0 left-0",
+                    tile.isNew && "game-2048-tile-new",
+                    tile.isMerged && "game-2048-tile-merged"
                   )}
+                  style={{
+                    width: `calc((100% - 3 * ${TILE_GAP}) / 4)`,
+                    height: `calc((100% - 3 * ${TILE_GAP}) / 4)`,
+                    transform: `translate(calc(${tile.col} * (100% + ${TILE_GAP})), calc(${tile.row} * (100% + ${TILE_GAP})))`,
+                    zIndex: tile.isMerged ? 3 : tile.isNew ? 2 : 1,
+                  }}
                 >
-                  {tile.value}
-                </span>
-              </div>
-            ))}
-          </div>
+                  <span
+                    className={cn(
+                      "flex h-full w-full items-center justify-center rounded-xl font-heading font-bold tabular-nums select-none",
+                      tileClass(tile.value),
+                      tileTextSize(tile.value)
+                    )}
+                  >
+                    {tile.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <span className="sr-only">
-          {DIFFICULTY_CONFIG[difficulty].label} mode. Board score {score}.{" "}
-          {tiles
-            .map(
-              (tile) =>
-                `${tile.value} at row ${tile.row + 1} column ${tile.col + 1}`
-            )
-            .join(". ")}
+          {DIFFICULTY_CONFIG[difficulty].label} mode. Board score {score}.
+          {paused
+            ? " Game paused."
+            : ` ${tiles
+                .map(
+                  (tile) =>
+                    `${tile.value} at row ${tile.row + 1} column ${tile.col + 1}`
+                )
+                .join(". ")}`}
         </span>
+
+        {paused && !over ? (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-3xl bg-background px-6">
+            <p className="font-heading text-2xl font-semibold tracking-tight text-foreground">
+              Paused
+            </p>
+            <p className="text-center text-sm text-muted-foreground">
+              Board hidden. Timer is frozen until you resume.
+            </p>
+            <button
+              type="button"
+              onClick={resumeGame}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-2xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground",
+                "hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              )}
+            >
+              <Play className="size-3.5" />
+              Resume
+            </button>
+          </div>
+        ) : null}
 
         {over ? (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-3xl bg-background/80 backdrop-blur-[2px]">
@@ -510,7 +611,7 @@ export function Game2048View() {
             </p>
             <p className="text-sm text-muted-foreground">Score {score}</p>
             <div className="flex items-center gap-2">
-              {canUndo ? (
+              {previous !== null ? (
                 <button
                   type="button"
                   onClick={handleUndo}

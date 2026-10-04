@@ -21,6 +21,8 @@ export type SavedGameState = {
   score: number;
   over: boolean;
   difficulty: Difficulty;
+  /** Hardest only: board is hidden and timer is frozen. */
+  paused?: boolean;
   /** Board/score from before the last successful move; null after undo or at start. */
   previous: SavedSnapshot | null;
 };
@@ -115,6 +117,12 @@ function isValidSavedGameState(value: unknown): value is SavedGameState {
     candidate.difficulty = "normal";
   }
   if (!isDifficulty(candidate.difficulty)) return false;
+  if (
+    candidate.paused !== undefined &&
+    typeof candidate.paused !== "boolean"
+  ) {
+    return false;
+  }
   if (candidate.previous === null) return true;
   return isValidSnapshot(candidate.previous);
 }
@@ -145,6 +153,8 @@ export function readGameState(): SavedGameState | null {
       score: Math.floor(parsed.score),
       over: parsed.over,
       difficulty: parsed.difficulty,
+      paused:
+        parsed.difficulty === "hardest" ? Boolean(parsed.paused) : false,
       previous: parsed.previous ? cloneSnapshot(parsed.previous) : null,
     };
   } catch {
@@ -160,6 +170,7 @@ export function writeGameState(state: SavedGameState): void {
       score: Math.max(0, Math.floor(state.score)),
       over: state.over,
       difficulty: state.difficulty,
+      paused: state.difficulty === "hardest" ? Boolean(state.paused) : false,
       previous: state.previous ? cloneSnapshot(state.previous) : null,
     };
     window.localStorage.setItem(GAME_STATE_KEY, JSON.stringify(payload));
