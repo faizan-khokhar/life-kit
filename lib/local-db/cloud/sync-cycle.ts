@@ -10,8 +10,16 @@ import {
   expenseRowToFirestorePayload,
   firestoreBudgetCategoryToRow,
   firestoreExpenseToRow,
+  firestoreGoalToRow,
+  firestoreGoalUpdateToRow,
+  firestoreHabitLogToRow,
+  firestoreHabitToRow,
   firestoreNoteFolderToRow,
   firestoreNoteToRow,
+  goalRowToFirestorePayload,
+  goalUpdateRowToFirestorePayload,
+  habitLogRowToFirestorePayload,
+  habitRowToFirestorePayload,
   noteFolderRowToFirestorePayload,
   noteRowToFirestorePayload,
 } from "@/lib/local-db/cloud/mappers";
@@ -28,6 +36,10 @@ const HARD_DELETE_COLLECTIONS: SyncCollection[] = [
   "noteFolders",
   "budget",
   "expenses",
+  "habits",
+  "habitLogs",
+  "goals",
+  "goalUpdates",
 ];
 
 async function resolveUpsertPayload(
@@ -55,6 +67,26 @@ async function resolveUpsertPayload(
     const local = await db.expenses.get(row.docId);
     if (!local) return null;
     return expenseRowToFirestorePayload(local);
+  }
+  if (row.collection === "habits") {
+    const local = await db.habits.get(row.docId);
+    if (!local) return null;
+    return habitRowToFirestorePayload(local);
+  }
+  if (row.collection === "habitLogs") {
+    const local = await db.habitLogs.get(row.docId);
+    if (!local) return null;
+    return habitLogRowToFirestorePayload(local);
+  }
+  if (row.collection === "goals") {
+    const local = await db.goals.get(row.docId);
+    if (!local) return null;
+    return goalRowToFirestorePayload(local);
+  }
+  if (row.collection === "goalUpdates") {
+    const local = await db.goalUpdates.get(row.docId);
+    if (!local) return null;
+    return goalUpdateRowToFirestorePayload(local);
   }
   return row.payloadJson ? (JSON.parse(row.payloadJson) as Record<string, unknown>) : null;
 }
@@ -145,6 +177,30 @@ async function mergeHardDeleteCollection(
       if (!local || remoteWins(local.updatedAt, row.updatedAt)) {
         await db.expenses.put(row);
       }
+    } else if (collection === "habits") {
+      const row = firestoreHabitToRow(id, data);
+      const local = await db.habits.get(id);
+      if (!local || remoteWins(local.updatedAt, row.updatedAt)) {
+        await db.habits.put(row);
+      }
+    } else if (collection === "habitLogs") {
+      const row = firestoreHabitLogToRow(id, data);
+      const local = await db.habitLogs.get(id);
+      if (!local || remoteWins(local.updatedAt, row.updatedAt)) {
+        await db.habitLogs.put(row);
+      }
+    } else if (collection === "goals") {
+      const row = firestoreGoalToRow(id, data);
+      const local = await db.goals.get(id);
+      if (!local || remoteWins(local.updatedAt, row.updatedAt)) {
+        await db.goals.put(row);
+      }
+    } else if (collection === "goalUpdates") {
+      const row = firestoreGoalUpdateToRow(id, data);
+      const local = await db.goalUpdates.get(id);
+      if (!local || remoteWins(local.updatedAt, row.updatedAt)) {
+        await db.goalUpdates.put(row);
+      }
     }
   }
 
@@ -169,6 +225,34 @@ async function mergeHardDeleteCollection(
       if (remoteIds.has(local.id)) continue;
       if (await hasPendingOutboxForDoc(uid, collection, local.id)) continue;
       await db.expenses.delete(local.id);
+    }
+  } else if (collection === "habits") {
+    const locals = await db.habits.toArray();
+    for (const local of locals) {
+      if (remoteIds.has(local.id)) continue;
+      if (await hasPendingOutboxForDoc(uid, collection, local.id)) continue;
+      await db.habits.delete(local.id);
+    }
+  } else if (collection === "habitLogs") {
+    const locals = await db.habitLogs.toArray();
+    for (const local of locals) {
+      if (remoteIds.has(local.id)) continue;
+      if (await hasPendingOutboxForDoc(uid, collection, local.id)) continue;
+      await db.habitLogs.delete(local.id);
+    }
+  } else if (collection === "goals") {
+    const locals = await db.goals.toArray();
+    for (const local of locals) {
+      if (remoteIds.has(local.id)) continue;
+      if (await hasPendingOutboxForDoc(uid, collection, local.id)) continue;
+      await db.goals.delete(local.id);
+    }
+  } else if (collection === "goalUpdates") {
+    const locals = await db.goalUpdates.toArray();
+    for (const local of locals) {
+      if (remoteIds.has(local.id)) continue;
+      if (await hasPendingOutboxForDoc(uid, collection, local.id)) continue;
+      await db.goalUpdates.delete(local.id);
     }
   }
 }

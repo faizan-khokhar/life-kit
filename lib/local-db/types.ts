@@ -4,7 +4,11 @@ export type SyncCollection =
   | "notes"
   | "noteFolders"
   | "budget"
-  | "expenses";
+  | "expenses"
+  | "habits"
+  | "habitLogs"
+  | "goals"
+  | "goalUpdates";
 
 export type OutboxOp = "upsert" | "delete";
 
@@ -63,6 +67,43 @@ export type ExpenseRow = {
   type: "income" | "expense";
   occurredAt: string;
   note: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type HabitRow = {
+  id: string;
+  name: string;
+  active: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type HabitLogRow = {
+  id: string;
+  habitId: string;
+  date: string;
+  completed: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type GoalRow = {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  deadline: string | null;
+  status: "active" | "completed";
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type GoalUpdateRow = {
+  id: string;
+  goalId: string;
+  date: string;
+  note: string;
   createdAt: string;
   updatedAt: string;
 };

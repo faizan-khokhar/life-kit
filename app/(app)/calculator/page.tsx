@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { ComingSoon } from "@/components/modules/coming-soon";
+import { CalculatorView } from "@/features/calculator";
+import { PageContainer } from "@/components/layout/page-container";
 import { getModule } from "@/lib/modules";
 
 const mod = getModule("calculator");
@@ -9,5 +10,9 @@ export const metadata: Metadata = {
 };
 
 export default function CalculatorPage() {
-  return <ComingSoon module={mod} />;
+  return (
+    <PageContainer>
+      <CalculatorView />
+    </PageContainer>
+  );
 }

@@ -7,6 +7,7 @@ import {
   CheckSquare,
   CreditCard,
   FileText,
+  Flame,
   PiggyBank,
   Receipt,
   Target,
@@ -72,6 +73,15 @@ export const modules: Module[] = [
     status: "coming-soon",
   },
   {
+    id: "habits",
+    title: "Habits",
+    description: "Build daily routines with a simple check-in.",
+    href: "/habits" as Route,
+    icon: Flame,
+    category: "personal",
+    status: "available",
+  },
+  {
     id: "tasks",
     title: "Tasks",
     description: "Capture to-dos and knock them out one by one.",
@@ -87,7 +97,7 @@ export const modules: Module[] = [
     href: "/goals",
     icon: Target,
     category: "personal",
-    status: "coming-soon",
+    status: "available",
   },
   {
     id: "planner",
@@ -114,7 +124,7 @@ export const modules: Module[] = [
     href: "/calculator",
     icon: Calculator,
     category: "tools",
-    status: "coming-soon",
+    status: "available",
   },
   {
     id: "converter",
@@ -139,11 +149,11 @@ export const categoryOrder: ModuleCategory[] = [
   "tools",
 ];
 
-export const featuredModuleIds = ["budget", "tasks", "goals", "notes"] as const;
+export const featuredModuleIds = ["budget", "habits", "goals", "notes"] as const;
 
 export const sidebarPrimaryIds = [
   "budget",
-  "tasks",
+  "habits",
   "goals",
   "planner",
   "notes",
@@ -172,6 +182,20 @@ export const quickActions: QuickAction[] = [
     description: "Create a new to-do",
     href: "/tasks",
     icon: CheckSquare,
+  },
+  {
+    id: "check-habits",
+    title: "Check Habits",
+    description: "Mark today's habits done",
+    href: "/habits" as Route,
+    icon: Flame,
+  },
+  {
+    id: "review-goals",
+    title: "Review Goals",
+    description: "Log weekly goal progress",
+    href: "/goals",
+    icon: Target,
   },
   {
     id: "add-note",

@@ -2,6 +2,10 @@ import Dexie, { type EntityTable } from "dexie";
 import type {
   BudgetCategoryRow,
   ExpenseRow,
+  GoalRow,
+  GoalUpdateRow,
+  HabitLogRow,
+  HabitRow,
   MetaRow,
   NoteFolderRow,
   NoteRow,
@@ -13,6 +17,10 @@ export type LifeKitDB = Dexie & {
   noteFolders: EntityTable<NoteFolderRow, "id">;
   budgetCategories: EntityTable<BudgetCategoryRow, "id">;
   expenses: EntityTable<ExpenseRow, "id">;
+  habits: EntityTable<HabitRow, "id">;
+  habitLogs: EntityTable<HabitLogRow, "id">;
+  goals: EntityTable<GoalRow, "id">;
+  goalUpdates: EntityTable<GoalUpdateRow, "id">;
   outbox: EntityTable<OutboxRow, "id">;
   meta: EntityTable<MetaRow, "key">;
 };
@@ -29,6 +37,14 @@ function createDb(uid: string): LifeKitDB {
     expenses: "id, occurredAt, type",
     outbox: "id, [collection+docId], createdAt",
     meta: "key",
+  });
+  db.version(2).stores({
+    habits: "id, active, updatedAt",
+    habitLogs: "id, habitId, date, updatedAt",
+  });
+  db.version(3).stores({
+    goals: "id, status, updatedAt",
+    goalUpdates: "id, goalId, date, updatedAt",
   });
   return db;
 }

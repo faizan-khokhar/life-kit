@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import { Bell, Download, Shield } from "lucide-react";
+import { Download, Shield } from "lucide-react";
 import { AccountCard } from "@/components/auth/account-card";
 import { PageContainer } from "@/components/layout/page-container";
+import { NotificationsRow } from "@/components/settings/notifications-row";
 import { SyncStatusRow } from "@/components/settings/sync-status-row";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,11 +13,6 @@ export const metadata: Metadata = {
 };
 
 const comingSoonRows = [
-  {
-    icon: Bell,
-    title: "Notifications",
-    description: "Reminders for bills and tasks",
-  },
   {
     icon: Download,
     title: "Export",
@@ -51,6 +47,18 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent>
             <ThemeToggle />
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/80 shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Notifications</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Optional push reminders for expenses and Sunday goal reviews.
+            </p>
+          </CardHeader>
+          <CardContent className="divide-y divide-border/70 p-0">
+            <NotificationsRow />
           </CardContent>
         </Card>
 

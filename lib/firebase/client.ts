@@ -1,6 +1,11 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import { getAuth, type Auth } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
+import {
+  getMessaging,
+  isSupported,
+  type Messaging,
+} from "firebase/messaging";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -23,3 +28,18 @@ const app = createFirebaseApp();
 export const auth: Auth = getAuth(app);
 export const firestore: Firestore = getFirestore(app);
 export { app };
+
+let messagingPromise: Promise<Messaging | null> | null = null;
+
+/** Browser-only FCM messaging instance; null when unsupported. */
+export function getClientMessaging(): Promise<Messaging | null> {
+  if (typeof window === "undefined") {
+    return Promise.resolve(null);
+  }
+  if (!messagingPromise) {
+    messagingPromise = isSupported()
+      .then((ok) => (ok ? getMessaging(app) : null))
+      .catch(() => null);
+  }
+  return messagingPromise;
+}

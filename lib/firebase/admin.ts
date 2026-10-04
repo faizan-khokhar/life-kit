@@ -7,6 +7,7 @@ import {
 } from "firebase-admin/app";
 import { getAuth, type Auth } from "firebase-admin/auth";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
+import { getMessaging, type Messaging } from "firebase-admin/messaging";
 
 if (typeof window !== "undefined") {
   throw new Error(
@@ -46,6 +47,7 @@ function createAdminApp(): App {
 
 let _adminAuth: Auth | undefined;
 let _adminFirestore: Firestore | undefined;
+let _adminMessaging: Messaging | undefined;
 
 /** Firebase Admin Auth — lazy so missing env vars fail at request time, not import. */
 export function getAdminAuth(): Auth {
@@ -61,6 +63,14 @@ export function getAdminFirestore(): Firestore {
     _adminFirestore = getFirestore(createAdminApp());
   }
   return _adminFirestore;
+}
+
+/** Firebase Admin Messaging — lazy so missing env vars fail at request time, not import. */
+export function getAdminMessaging(): Messaging {
+  if (!_adminMessaging) {
+    _adminMessaging = getMessaging(createAdminApp());
+  }
+  return _adminMessaging;
 }
 
 /** HLD alias — prefer getAdminAuth() in new code. */

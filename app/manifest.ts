@@ -8,6 +8,7 @@ export default function manifest(): MetadataRoute.Manifest {
       "One app. Many useful things. A personal utility kit for budget, tasks, goals, and more.",
     start_url: "/",
     display: "standalone",
+    orientation: "portrait-primary",
     background_color: "#f9f7f4",
     theme_color: "#2a8a7a",
     icons: [
