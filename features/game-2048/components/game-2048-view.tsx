@@ -4,13 +4,14 @@ import { useEffect, useRef, useState, type TouchEvent } from "react";
 import { Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  cloneBoard,
-  createInitialState,
+  boardToTiles,
+  createInitialTiles,
   isGameOver,
-  move,
-  spawnRandomTile,
-  type Board,
+  moveTiles,
+  spawnTile,
+  tilesToBoard,
   type Direction,
+  type Tile,
 } from "@/features/game-2048/lib/game";
 import {
   readBestScore,
@@ -21,6 +22,8 @@ import {
 } from "@/features/game-2048/lib/storage";
 
 const SWIPE_THRESHOLD = 24;
+const MOVE_LOCK_MS = 150;
+const TILE_GAP = "0.5rem";
 
 const KEY_TO_DIRECTION: Record<string, Direction> = {
   ArrowUp: "up",
@@ -39,8 +42,6 @@ const KEY_TO_DIRECTION: Record<string, Direction> = {
 
 function tileClass(value: number): string {
   switch (value) {
-    case 0:
-      return "bg-muted/60 text-transparent";
     case 2:
       return "bg-[#eee4da] text-[#776e65]";
     case 4:
@@ -78,7 +79,7 @@ function tileTextSize(value: number): string {
 type TouchPoint = { x: number; y: number };
 
 type PlayState = {
-  board: Board;
+  tiles: Tile[];
   score: number;
   best: number;
   over: boolean;
@@ -89,24 +90,25 @@ type PlayState = {
 function applyDirection(state: PlayState, direction: Direction): PlayState {
   if (state.over) return state;
 
-  const result = move(state.board, direction);
+  const result = moveTiles(state.tiles, direction);
   if (!result.moved) return state;
 
-  const nextBoard = spawnRandomTile(result.board);
+  const nextTiles = spawnTile(result.tiles);
   const nextScore = state.score + result.scoreGained;
   const nextBest = Math.max(state.best, nextScore);
+  const nextBoard = tilesToBoard(nextTiles);
 
   if (nextBest > state.best) {
     writeBestScore(nextBest);
   }
 
   return {
-    board: nextBoard,
+    tiles: nextTiles,
     score: nextScore,
     best: nextBest,
     over: isGameOver(nextBoard),
     previous: {
-      board: cloneBoard(state.board),
+      board: tilesToBoard(state.tiles),
       score: state.score,
     },
   };
@@ -115,7 +117,7 @@ function applyDirection(state: PlayState, direction: Direction): PlayState {
 function undoLastMove(state: PlayState): PlayState {
   if (!state.previous) return state;
   return {
-    board: cloneBoard(state.previous.board),
+    tiles: boardToTiles(state.previous.board),
     score: state.previous.score,
     best: state.best,
     over: false,
@@ -124,9 +126,8 @@ function undoLastMove(state: PlayState): PlayState {
 }
 
 function createFreshPlayState(best: number): PlayState {
-  const initial = createInitialState();
   return {
-    board: initial.board,
+    tiles: createInitialTiles(),
     score: 0,
     best,
     over: false,
@@ -137,6 +138,7 @@ function createFreshPlayState(best: number): PlayState {
 export function Game2048View() {
   const [state, setState] = useState<PlayState | null>(null);
   const touchStart = useRef<TouchPoint | null>(null);
+  const moveLockedUntil = useRef(0);
 
   useEffect(() => {
     const best = readBestScore();
@@ -144,7 +146,7 @@ export function Game2048View() {
 
     if (saved) {
       setState({
-        board: saved.board,
+        tiles: boardToTiles(saved.board),
         score: saved.score,
         best: Math.max(best, saved.score),
         over: saved.over,
@@ -159,7 +161,7 @@ export function Game2048View() {
   useEffect(() => {
     if (!state) return;
     writeGameState({
-      board: state.board,
+      board: tilesToBoard(state.tiles),
       score: state.score,
       over: state.over,
       previous: state.previous,
@@ -178,7 +180,16 @@ export function Game2048View() {
   }
 
   function applyMove(direction: Direction) {
-    setState((prev) => (prev ? applyDirection(prev, direction) : prev));
+    if (Date.now() < moveLockedUntil.current) return;
+
+    setState((prev) => {
+      if (!prev) return prev;
+      const next = applyDirection(prev, direction);
+      if (next !== prev) {
+        moveLockedUntil.current = Date.now() + MOVE_LOCK_MS;
+      }
+      return next;
+    });
   }
 
   useEffect(() => {
@@ -236,7 +247,7 @@ export function Game2048View() {
     );
   }
 
-  const { board, score, best, over, previous } = state;
+  const { tiles, score, best, over, previous } = state;
   const canUndo = previous !== null;
 
   return (
@@ -282,27 +293,55 @@ export function Game2048View() {
         onTouchEnd={onTouchEnd}
         style={{ touchAction: "none" }}
       >
-        <div className="grid aspect-square grid-cols-4 grid-rows-4 gap-2 rounded-2xl bg-[#bbada0] p-2">
-          {board.flatMap((row, r) =>
-            row.map((value, c) => (
+        <div className="relative aspect-square rounded-2xl bg-[#bbada0] p-2">
+          <div className="grid h-full w-full grid-cols-4 grid-rows-4 gap-2">
+            {Array.from({ length: 16 }, (_, index) => (
               <div
-                key={`${r}-${c}`}
+                key={index}
+                className="rounded-xl bg-[#cdc1b4]/80"
+                aria-hidden
+              />
+            ))}
+          </div>
+
+          <div className="pointer-events-none absolute inset-2">
+            {tiles.map((tile) => (
+              <div
+                key={tile.id}
                 className={cn(
-                  "flex h-full w-full items-center justify-center rounded-xl font-heading font-bold tabular-nums select-none",
-                  "transition-colors duration-150",
-                  tileClass(value),
-                  value > 0 && tileTextSize(value)
+                  "game-2048-tile absolute top-0 left-0",
+                  tile.isNew && "game-2048-tile-new",
+                  tile.isMerged && "game-2048-tile-merged"
                 )}
-                aria-label={value === 0 ? "Empty cell" : `Tile ${value}`}
+                style={{
+                  width: `calc((100% - 3 * ${TILE_GAP}) / 4)`,
+                  height: `calc((100% - 3 * ${TILE_GAP}) / 4)`,
+                  transform: `translate(calc(${tile.col} * (100% + ${TILE_GAP})), calc(${tile.row} * (100% + ${TILE_GAP})))`,
+                  zIndex: tile.isMerged ? 3 : tile.isNew ? 2 : 1,
+                }}
               >
-                {value || ""}
+                <span
+                  className={cn(
+                    "flex h-full w-full items-center justify-center rounded-xl font-heading font-bold tabular-nums select-none",
+                    tileClass(tile.value),
+                    tileTextSize(tile.value)
+                  )}
+                >
+                  {tile.value}
+                </span>
               </div>
-            ))
-          )}
+            ))}
+          </div>
         </div>
 
+        {/* Screen-reader board summary */}
+        <span className="sr-only">
+          Board score {score}.{" "}
+          {tiles.map((tile) => `${tile.value} at row ${tile.row + 1} column ${tile.col + 1}`).join(". ")}
+        </span>
+
         {over ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-3xl bg-background/80 backdrop-blur-[2px]">
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-3xl bg-background/80 backdrop-blur-[2px]">
             <p className="font-heading text-2xl font-semibold tracking-tight text-foreground">
               Game Over
             </p>

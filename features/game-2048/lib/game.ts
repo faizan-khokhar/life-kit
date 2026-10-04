@@ -3,8 +3,23 @@ export const SIZE = 4;
 export type Board = number[][];
 export type Direction = "up" | "down" | "left" | "right";
 
+export type Tile = {
+  id: number;
+  value: number;
+  row: number;
+  col: number;
+  isNew?: boolean;
+  isMerged?: boolean;
+};
+
 export type MoveResult = {
   board: Board;
+  scoreGained: number;
+  moved: boolean;
+};
+
+export type TileMoveResult = {
+  tiles: Tile[];
   scoreGained: number;
   moved: boolean;
 };
@@ -14,12 +29,39 @@ export type GameState = {
   score: number;
 };
 
+let nextTileId = 1;
+
+function allocTileId(): number {
+  return nextTileId++;
+}
+
 export function createEmptyBoard(): Board {
   return Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
 }
 
 export function cloneBoard(board: Board): Board {
   return board.map((row) => [...row]);
+}
+
+export function tilesToBoard(tiles: Tile[]): Board {
+  const board = createEmptyBoard();
+  for (const tile of tiles) {
+    board[tile.row][tile.col] = tile.value;
+  }
+  return board;
+}
+
+export function boardToTiles(board: Board): Tile[] {
+  const tiles: Tile[] = [];
+  for (let row = 0; row < SIZE; row++) {
+    for (let col = 0; col < SIZE; col++) {
+      const value = board[row][col];
+      if (value !== 0) {
+        tiles.push({ id: allocTileId(), value, row, col });
+      }
+    }
+  }
+  return tiles;
 }
 
 function emptyCells(board: Board): Array<[number, number]> {
@@ -40,6 +82,16 @@ export function spawnRandomTile(board: Board): Board {
   const [r, c] = cells[Math.floor(Math.random() * cells.length)];
   next[r][c] = Math.random() < 0.9 ? 2 : 4;
   return next;
+}
+
+export function spawnTile(tiles: Tile[]): Tile[] {
+  const board = tilesToBoard(tiles);
+  const cells = emptyCells(board);
+  if (cells.length === 0) return tiles;
+
+  const [row, col] = cells[Math.floor(Math.random() * cells.length)];
+  const value = Math.random() < 0.9 ? 2 : 4;
+  return [...tiles, { id: allocTileId(), value, row, col, isNew: true }];
 }
 
 /** Slide and merge one line toward the start (index 0). */
@@ -72,6 +124,31 @@ function boardsEqual(a: Board, b: Board): boolean {
     }
   }
   return true;
+}
+
+/** Cell order for a line so index 0 is the destination edge. */
+function linePositions(
+  direction: Direction,
+  line: number
+): Array<{ row: number; col: number }> {
+  const positions: Array<{ row: number; col: number }> = [];
+  for (let i = 0; i < SIZE; i++) {
+    switch (direction) {
+      case "left":
+        positions.push({ row: line, col: i });
+        break;
+      case "right":
+        positions.push({ row: line, col: SIZE - 1 - i });
+        break;
+      case "up":
+        positions.push({ row: i, col: line });
+        break;
+      case "down":
+        positions.push({ row: SIZE - 1 - i, col: line });
+        break;
+    }
+  }
+  return positions;
 }
 
 export function move(board: Board, direction: Direction): MoveResult {
@@ -110,6 +187,67 @@ export function move(board: Board, direction: Direction): MoveResult {
   return { board: next, scoreGained, moved };
 }
 
+/** Identity-preserving move for CSS slide animations. */
+export function moveTiles(tiles: Tile[], direction: Direction): TileMoveResult {
+  const byPos = new Map<string, Tile>();
+  for (const tile of tiles) {
+    byPos.set(`${tile.row},${tile.col}`, {
+      ...tile,
+      isNew: false,
+      isMerged: false,
+    });
+  }
+
+  let scoreGained = 0;
+  const nextTiles: Tile[] = [];
+
+  for (let line = 0; line < SIZE; line++) {
+    const positions = linePositions(direction, line);
+    const lineTiles = positions
+      .map((pos) => byPos.get(`${pos.row},${pos.col}`))
+      .filter((tile): tile is Tile => tile != null);
+
+    const packed: Tile[] = [];
+    let i = 0;
+    while (i < lineTiles.length) {
+      const current = lineTiles[i];
+      const next = lineTiles[i + 1];
+      if (next && current.value === next.value) {
+        const value = current.value * 2;
+        scoreGained += value;
+        packed.push({
+          id: current.id,
+          value,
+          row: current.row,
+          col: current.col,
+          isMerged: true,
+        });
+        i += 2;
+      } else {
+        packed.push({
+          id: current.id,
+          value: current.value,
+          row: current.row,
+          col: current.col,
+        });
+        i += 1;
+      }
+    }
+
+    for (let slot = 0; slot < packed.length; slot++) {
+      const pos = positions[slot];
+      nextTiles.push({
+        ...packed[slot],
+        row: pos.row,
+        col: pos.col,
+      });
+    }
+  }
+
+  const moved = !boardsEqual(tilesToBoard(tiles), tilesToBoard(nextTiles));
+  return { tiles: nextTiles, scoreGained, moved };
+}
+
 export function isGameOver(board: Board): boolean {
   if (emptyCells(board).length > 0) return false;
 
@@ -128,4 +266,8 @@ export function createInitialState(): GameState {
   board = spawnRandomTile(board);
   board = spawnRandomTile(board);
   return { board, score: 0 };
+}
+
+export function createInitialTiles(): Tile[] {
+  return boardToTiles(createInitialState().board);
 }

@@ -172,3 +172,52 @@
     @apply font-sans;
   }
 }
+
+@keyframes game-2048-appear {
+  0% {
+    transform: scale(0);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes game-2048-pop {
+  0% {
+    transform: scale(1);
+    filter: brightness(1);
+    box-shadow: 0 0 0 0 transparent;
+  }
+  35% {
+    transform: scale(1.28);
+    filter: brightness(1.25);
+    box-shadow: 0 8px 20px rgb(0 0 0 / 28%);
+  }
+  70% {
+    transform: scale(0.94);
+    filter: brightness(1.08);
+    box-shadow: 0 4px 10px rgb(0 0 0 / 16%);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+.game-2048-tile {
+  transition: transform 120ms ease-in;
+  will-change: transform;
+}
+
+.game-2048-tile-new > span {
+  animation: game-2048-appear 140ms ease-out 120ms both;
+}
+
+.game-2048-tile-merged {
+  z-index: 3;
+}
+
+.game-2048-tile-merged > span {
+  animation: game-2048-pop 280ms cubic-bezier(0.2, 0.9, 0.3, 1.2) 110ms both;
+}
