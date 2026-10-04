@@ -8,6 +8,7 @@ import {
   CreditCard,
   FileText,
   Flame,
+  Gamepad2,
   PiggyBank,
   Receipt,
   Target,
@@ -135,6 +136,15 @@ export const modules: Module[] = [
     category: "tools",
     status: "coming-soon",
   },
+  {
+    id: "game-2048",
+    title: "2048",
+    description: "Slide tiles, merge numbers, beat your best score.",
+    href: "/2048" as Route,
+    icon: Gamepad2,
+    category: "tools",
+    status: "available",
+  },
 ];
 
 export const categoryLabels: Record<ModuleCategory, string> = {
@@ -159,7 +169,7 @@ export const sidebarPrimaryIds = [
   "notes",
 ] as const;
 
-export const sidebarToolIds = ["calculator", "converter"] as const;
+export const sidebarToolIds = ["calculator", "converter", "game-2048"] as const;
 
 export const quickActions: QuickAction[] = [
   {
