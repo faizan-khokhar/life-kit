@@ -445,7 +445,7 @@ export function Game2048View() {
       </header>
 
       <div
-        className="grid grid-cols-3 gap-1 rounded-2xl bg-muted p-1"
+        className="grid grid-cols-4 gap-1 rounded-2xl bg-muted p-1"
         role="group"
         aria-label="Difficulty"
       >

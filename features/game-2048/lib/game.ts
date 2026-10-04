@@ -1,5 +1,6 @@
 import {
   DIFFICULTY_CONFIG,
+  RANDOM_START_MAX_EXPONENT,
   type Difficulty,
 } from "@/features/game-2048/lib/difficulty";
 
@@ -369,9 +370,66 @@ export function isGameOver(board: Board): boolean {
   return true;
 }
 
+/** Any power of two from 2^1 up to 2^RANDOM_START_MAX_EXPONENT — no sequence. */
+function randomStartValue(): number {
+  const exp =
+    1 + Math.floor(Math.random() * RANDOM_START_MAX_EXPONENT);
+  return 2 ** exp;
+}
+
+function shuffleInPlace<T>(items: T[]): T[] {
+  for (let i = items.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = items[i];
+    items[i] = items[j];
+    items[j] = tmp;
+  }
+  return items;
+}
+
+/**
+ * Scatter random power-of-two tiles across the board (not a full fill).
+ * Retries until the position is still playable.
+ */
+export function createRandomStartBoard(): Board {
+  const minTiles = 6;
+  const maxTiles = 12;
+
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const board = createEmptyBoard();
+    const cells = shuffleInPlace(
+      Array.from({ length: SIZE * SIZE }, (_, index) => ({
+        row: Math.floor(index / SIZE),
+        col: index % SIZE,
+      }))
+    );
+    const count =
+      minTiles + Math.floor(Math.random() * (maxTiles - minTiles + 1));
+
+    for (let i = 0; i < count; i++) {
+      const { row, col } = cells[i];
+      board[row][col] = randomStartValue();
+    }
+
+    if (!isGameOver(board) && emptyCells(board).length > 0) {
+      return board;
+    }
+  }
+
+  // Extremely unlikely fallback: classic two-tile open.
+  let board = createEmptyBoard();
+  board = spawnRandomTile(board, "normal");
+  board = spawnRandomTile(board, "normal");
+  return board;
+}
+
 export function createInitialState(
   difficulty: Difficulty = "normal"
 ): GameState {
+  if (DIFFICULTY_CONFIG[difficulty].randomStart) {
+    return { board: createRandomStartBoard(), score: 0 };
+  }
+
   let board = createEmptyBoard();
   board = spawnRandomTile(board, difficulty);
   board = spawnRandomTile(board, difficulty);
