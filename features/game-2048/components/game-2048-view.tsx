@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type TouchEvent } from "react";
-import { Pause, Play, Undo2 } from "lucide-react";
+import { Pause, Play, RotateCcw, Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -309,12 +309,17 @@ export function Game2048View() {
     resetTimer();
   }
 
-  function startNewRun() {
+  function restartGame() {
     const prev = stateRef.current;
-    if (!prev?.over) return;
-    commitState(createFreshPlayState(prev.best, prev.difficulty));
+    if (!prev) return;
+    const best = Math.max(prev.best, readBestScore(prev.difficulty));
+    commitState(createFreshPlayState(best, prev.difficulty));
     setPaused(false);
     resetTimer();
+  }
+
+  function startNewRun() {
+    restartGame();
   }
 
   function applyMove(direction: Direction) {
@@ -425,23 +430,39 @@ export function Game2048View() {
             Swipe or use arrow keys. Undo one move.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={handleUndo}
-          disabled={!canUndo}
-          className={cn(
-            "inline-flex shrink-0 items-center gap-1.5 rounded-2xl px-3 py-2 text-sm font-medium",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            canUndo
-              ? "bg-secondary text-secondary-foreground hover:bg-secondary/80"
-              : "cursor-not-allowed bg-muted text-muted-foreground"
-          )}
-          aria-label={canUndo ? "Undo last move" : "No move to undo"}
-          title={canUndo ? "Undo last move" : "No move to undo"}
-        >
-          <Undo2 className="size-3.5" />
-          Undo
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={restartGame}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-2xl px-3 py-2 text-sm font-medium",
+              "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            )}
+            aria-label="Restart game"
+            title="Restart game"
+          >
+            <RotateCcw className="size-3.5" />
+            Restart
+          </button>
+          <button
+            type="button"
+            onClick={handleUndo}
+            disabled={!canUndo}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-2xl px-3 py-2 text-sm font-medium",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              canUndo
+                ? "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                : "cursor-not-allowed bg-muted text-muted-foreground"
+            )}
+            aria-label={canUndo ? "Undo last move" : "No move to undo"}
+            title={canUndo ? "Undo last move" : "No move to undo"}
+          >
+            <Undo2 className="size-3.5" />
+            Undo
+          </button>
+        </div>
       </header>
 
       <div

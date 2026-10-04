@@ -3,9 +3,9 @@ export const HARDEST_MOVE_TIME_MS = 20_000;
 
 /**
  * Max tile exponent for Random start (value = 2^exp).
- * Raise this freely — not a gameplay “cap”, just avoids absurd float sizes.
+ * Capped at 1024 so the seed never reaches the 2048 goal.
  */
-export const RANDOM_START_MAX_EXPONENT = 16; // up to 65536
+export const RANDOM_START_MAX_EXPONENT = 10; // 2..1024
 
 export type Difficulty = "normal" | "hard" | "hardest" | "random";
 

@@ -370,10 +370,9 @@ export function isGameOver(board: Board): boolean {
   return true;
 }
 
-/** Any power of two from 2^1 up to 2^RANDOM_START_MAX_EXPONENT — no sequence. */
+/** Power of two from 2^1 .. 2^RANDOM_START_MAX_EXPONENT (max 1024) — no sequence. */
 function randomStartValue(): number {
-  const exp =
-    1 + Math.floor(Math.random() * RANDOM_START_MAX_EXPONENT);
+  const exp = 1 + Math.floor(Math.random() * RANDOM_START_MAX_EXPONENT);
   return 2 ** exp;
 }
 
