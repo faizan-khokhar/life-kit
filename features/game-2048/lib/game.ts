@@ -1,7 +1,13 @@
+import {
+  DIFFICULTY_CONFIG,
+  type Difficulty,
+} from "@/features/game-2048/lib/difficulty";
+
 export const SIZE = 4;
 
 export type Board = number[][];
 export type Direction = "up" | "down" | "left" | "right";
+export type { Difficulty };
 
 export type Tile = {
   id: number;
@@ -74,24 +80,126 @@ function emptyCells(board: Board): Array<[number, number]> {
   return cells;
 }
 
-export function spawnRandomTile(board: Board): Board {
+function neighbors(row: number, col: number): Array<[number, number]> {
+  const result: Array<[number, number]> = [];
+  if (row > 0) result.push([row - 1, col]);
+  if (row < SIZE - 1) result.push([row + 1, col]);
+  if (col > 0) result.push([row, col - 1]);
+  if (col < SIZE - 1) result.push([row, col + 1]);
+  return result;
+}
+
+/** Occupied neighbors that cannot merge with `value` score higher (worse for player). */
+function hostilityScore(
+  board: Board,
+  row: number,
+  col: number,
+  value: number
+): number {
+  let score = 0;
+  for (const [nr, nc] of neighbors(row, col)) {
+    const neighbor = board[nr][nc];
+    if (neighbor === 0) continue;
+    if (neighbor === value) score -= 2;
+    else score += 1;
+  }
+  return score;
+}
+
+function pickWorstCell(board: Board): [number, number] | null {
   const cells = emptyCells(board);
-  if (cells.length === 0) return board;
+  if (cells.length === 0) return null;
+
+  let bestScore = -Infinity;
+  const candidates: Array<[number, number]> = [];
+
+  for (const [row, col] of cells) {
+    let blockers = 0;
+    for (const [nr, nc] of neighbors(row, col)) {
+      if (board[nr][nc] !== 0) blockers += 1;
+    }
+    if (blockers > bestScore) {
+      bestScore = blockers;
+      candidates.length = 0;
+      candidates.push([row, col]);
+    } else if (blockers === bestScore) {
+      candidates.push([row, col]);
+    }
+  }
+
+  return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
+function pickRandomCell(board: Board): [number, number] | null {
+  const cells = emptyCells(board);
+  if (cells.length === 0) return null;
+  return cells[Math.floor(Math.random() * cells.length)];
+}
+
+function pickWorstValue(
+  board: Board,
+  row: number,
+  col: number,
+  fourChance: number
+): 2 | 4 {
+  const score2 = hostilityScore(board, row, col, 2);
+  const score4 = hostilityScore(board, row, col, 4);
+  if (score4 > score2) return 4;
+  if (score2 > score4) return 2;
+  return Math.random() < fourChance ? 4 : 2;
+}
+
+type SpawnChoice = { row: number; col: number; value: 2 | 4 };
+
+function chooseSpawn(
+  board: Board,
+  difficulty: Difficulty
+): SpawnChoice | null {
+  const config = DIFFICULTY_CONFIG[difficulty];
+  const cell = config.hostileCell
+    ? pickWorstCell(board)
+    : pickRandomCell(board);
+  if (!cell) return null;
+
+  const [row, col] = cell;
+  const value = config.hostileValue
+    ? pickWorstValue(board, row, col, config.fourChance)
+    : Math.random() < config.fourChance
+      ? 4
+      : 2;
+
+  return { row, col, value };
+}
+
+export function spawnRandomTile(
+  board: Board,
+  difficulty: Difficulty = "normal"
+): Board {
+  const choice = chooseSpawn(board, difficulty);
+  if (!choice) return board;
 
   const next = cloneBoard(board);
-  const [r, c] = cells[Math.floor(Math.random() * cells.length)];
-  next[r][c] = Math.random() < 0.9 ? 2 : 4;
+  next[choice.row][choice.col] = choice.value;
   return next;
 }
 
-export function spawnTile(tiles: Tile[]): Tile[] {
-  const board = tilesToBoard(tiles);
-  const cells = emptyCells(board);
-  if (cells.length === 0) return tiles;
+export function spawnTile(
+  tiles: Tile[],
+  difficulty: Difficulty = "normal"
+): Tile[] {
+  const choice = chooseSpawn(tilesToBoard(tiles), difficulty);
+  if (!choice) return tiles;
 
-  const [row, col] = cells[Math.floor(Math.random() * cells.length)];
-  const value = Math.random() < 0.9 ? 2 : 4;
-  return [...tiles, { id: allocTileId(), value, row, col, isNew: true }];
+  return [
+    ...tiles,
+    {
+      id: allocTileId(),
+      value: choice.value,
+      row: choice.row,
+      col: choice.col,
+      isNew: true,
+    },
+  ];
 }
 
 /** Slide and merge one line toward the start (index 0). */
@@ -261,13 +369,17 @@ export function isGameOver(board: Board): boolean {
   return true;
 }
 
-export function createInitialState(): GameState {
+export function createInitialState(
+  difficulty: Difficulty = "normal"
+): GameState {
   let board = createEmptyBoard();
-  board = spawnRandomTile(board);
-  board = spawnRandomTile(board);
+  board = spawnRandomTile(board, difficulty);
+  board = spawnRandomTile(board, difficulty);
   return { board, score: 0 };
 }
 
-export function createInitialTiles(): Tile[] {
-  return boardToTiles(createInitialState().board);
+export function createInitialTiles(
+  difficulty: Difficulty = "normal"
+): Tile[] {
+  return boardToTiles(createInitialState(difficulty).board);
 }

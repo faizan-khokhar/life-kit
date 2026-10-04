@@ -3,6 +3,21 @@
 import { useEffect, useRef, useState, type TouchEvent } from "react";
 import { Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DIFFICULTIES,
+  DIFFICULTY_CONFIG,
+  HARDEST_MOVE_TIME_MS,
+  type Difficulty,
+} from "@/features/game-2048/lib/difficulty";
 import {
   boardToTiles,
   createInitialTiles,
@@ -24,6 +39,7 @@ import {
 const SWIPE_THRESHOLD = 24;
 const MOVE_LOCK_MS = 150;
 const TILE_GAP = "0.5rem";
+const TIMER_URGENCY_MS = 5_000;
 
 const KEY_TO_DIRECTION: Record<string, Direction> = {
   ArrowUp: "up",
@@ -76,6 +92,13 @@ function tileTextSize(value: number): string {
   return "text-2xl sm:text-3xl";
 }
 
+function formatCountdown(ms: number): string {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
 type TouchPoint = { x: number; y: number };
 
 type PlayState = {
@@ -83,9 +106,14 @@ type PlayState = {
   score: number;
   best: number;
   over: boolean;
+  difficulty: Difficulty;
   /** Snapshot from before the last successful move. Cleared after undo. */
   previous: SavedSnapshot | null;
 };
+
+function hasProgress(state: PlayState): boolean {
+  return state.previous !== null || state.score > 0 || state.over;
+}
 
 function applyDirection(state: PlayState, direction: Direction): PlayState {
   if (state.over) return state;
@@ -93,16 +121,17 @@ function applyDirection(state: PlayState, direction: Direction): PlayState {
   const result = moveTiles(state.tiles, direction);
   if (!result.moved) return state;
 
-  const nextTiles = spawnTile(result.tiles);
+  const nextTiles = spawnTile(result.tiles, state.difficulty);
   const nextScore = state.score + result.scoreGained;
   const nextBest = Math.max(state.best, nextScore);
   const nextBoard = tilesToBoard(nextTiles);
 
   if (nextBest > state.best) {
-    writeBestScore(nextBest);
+    writeBestScore(nextBest, state.difficulty);
   }
 
   return {
+    ...state,
     tiles: nextTiles,
     score: nextScore,
     best: nextBest,
@@ -117,32 +146,58 @@ function applyDirection(state: PlayState, direction: Direction): PlayState {
 function undoLastMove(state: PlayState): PlayState {
   if (!state.previous) return state;
   return {
+    ...state,
     tiles: boardToTiles(state.previous.board),
     score: state.previous.score,
-    best: state.best,
     over: false,
     previous: null,
   };
 }
 
-function createFreshPlayState(best: number): PlayState {
+function createFreshPlayState(
+  best: number,
+  difficulty: Difficulty
+): PlayState {
   return {
-    tiles: createInitialTiles(),
+    tiles: createInitialTiles(difficulty),
     score: 0,
     best,
     over: false,
+    difficulty,
     previous: null,
+  };
+}
+
+function applyTimeoutPenalty(state: PlayState): PlayState {
+  if (state.difficulty !== "hardest" || state.over) return state;
+
+  const nextTiles = spawnTile(state.tiles, "hardest");
+  return {
+    ...state,
+    tiles: nextTiles,
+    over: isGameOver(tilesToBoard(nextTiles)),
   };
 }
 
 export function Game2048View() {
   const [state, setState] = useState<PlayState | null>(null);
+  const [pendingDifficulty, setPendingDifficulty] = useState<Difficulty | null>(
+    null
+  );
+  const [timerToken, setTimerToken] = useState(0);
+  const [msLeft, setMsLeft] = useState(HARDEST_MOVE_TIME_MS);
   const touchStart = useRef<TouchPoint | null>(null);
   const moveLockedUntil = useRef(0);
 
+  function resetTimer() {
+    setMsLeft(HARDEST_MOVE_TIME_MS);
+    setTimerToken((token) => token + 1);
+  }
+
   useEffect(() => {
-    const best = readBestScore();
     const saved = readGameState();
+    const difficulty = saved?.difficulty ?? "normal";
+    const best = readBestScore(difficulty);
 
     if (saved) {
       setState({
@@ -150,12 +205,13 @@ export function Game2048View() {
         score: saved.score,
         best: Math.max(best, saved.score),
         over: saved.over,
+        difficulty: saved.difficulty,
         previous: saved.previous,
       });
       return;
     }
 
-    setState(createFreshPlayState(best));
+    setState(createFreshPlayState(best, "normal"));
   }, []);
 
   useEffect(() => {
@@ -164,32 +220,87 @@ export function Game2048View() {
       board: tilesToBoard(state.tiles),
       score: state.score,
       over: state.over,
+      difficulty: state.difficulty,
       previous: state.previous,
     });
   }, [state]);
 
+  useEffect(() => {
+    if (!state || state.difficulty !== "hardest" || state.over) return;
+
+    const startedAt = Date.now();
+    setMsLeft(HARDEST_MOVE_TIME_MS);
+
+    const id = window.setInterval(() => {
+      const left = Math.max(0, HARDEST_MOVE_TIME_MS - (Date.now() - startedAt));
+      setMsLeft(left);
+
+      if (left <= 0) {
+        window.clearInterval(id);
+        setState((prev) => (prev ? applyTimeoutPenalty(prev) : prev));
+        setTimerToken((token) => token + 1);
+      }
+    }, 100);
+
+    return () => window.clearInterval(id);
+  }, [state?.difficulty, state?.over, timerToken]);
+
+  function requestDifficultyChange(next: Difficulty) {
+    if (!state || next === state.difficulty) return;
+
+    if (!hasProgress(state)) {
+      const best = readBestScore(next);
+      setState(createFreshPlayState(best, next));
+      resetTimer();
+      return;
+    }
+
+    setPendingDifficulty(next);
+  }
+
+  function confirmDifficultyChange() {
+    if (!pendingDifficulty) return;
+    const best = readBestScore(pendingDifficulty);
+    setState(createFreshPlayState(best, pendingDifficulty));
+    setPendingDifficulty(null);
+    resetTimer();
+  }
+
   function handleUndo() {
-    setState((prev) => (prev ? undoLastMove(prev) : prev));
+    let didUndo = false;
+    setState((prev) => {
+      if (!prev) return prev;
+      const next = undoLastMove(prev);
+      didUndo = next !== prev;
+      return next;
+    });
+    if (didUndo) resetTimer();
   }
 
   function startNewRun() {
+    let restarted = false;
     setState((prev) => {
       if (!prev?.over) return prev;
-      return createFreshPlayState(prev.best);
+      restarted = true;
+      return createFreshPlayState(prev.best, prev.difficulty);
     });
+    if (restarted) resetTimer();
   }
 
   function applyMove(direction: Direction) {
     if (Date.now() < moveLockedUntil.current) return;
 
+    let didMove = false;
     setState((prev) => {
       if (!prev) return prev;
       const next = applyDirection(prev, direction);
       if (next !== prev) {
         moveLockedUntil.current = Date.now() + MOVE_LOCK_MS;
+        didMove = true;
       }
       return next;
     });
+    if (didMove) resetTimer();
   }
 
   useEffect(() => {
@@ -247,8 +358,10 @@ export function Game2048View() {
     );
   }
 
-  const { tiles, score, best, over, previous } = state;
+  const { tiles, score, best, over, previous, difficulty } = state;
   const canUndo = previous !== null;
+  const showTimer = difficulty === "hardest" && !over;
+  const timerUrgent = showTimer && msLeft <= TIMER_URGENCY_MS;
 
   return (
     <div className="mx-auto flex w-full max-w-sm flex-col gap-4">
@@ -280,10 +393,56 @@ export function Game2048View() {
         </button>
       </header>
 
+      <div
+        className="grid grid-cols-3 gap-1 rounded-2xl bg-muted p-1"
+        role="group"
+        aria-label="Difficulty"
+      >
+        {DIFFICULTIES.map((level) => {
+          const active = difficulty === level;
+          return (
+            <button
+              key={level}
+              type="button"
+              onClick={() => requestDifficultyChange(level)}
+              className={cn(
+                "rounded-xl px-2 py-2 text-xs font-medium transition-colors sm:text-sm",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                active
+                  ? "bg-card text-foreground shadow-sm ring-1 ring-foreground/10"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+              aria-pressed={active}
+            >
+              {DIFFICULTY_CONFIG[level].label}
+            </button>
+          );
+        })}
+      </div>
+
       <div className="grid grid-cols-2 gap-2">
         <ScoreCard label="Score" value={score} />
         <ScoreCard label="Best" value={best} />
       </div>
+
+      {showTimer ? (
+        <div
+          className={cn(
+            "flex items-center justify-between rounded-2xl px-4 py-2.5 ring-1",
+            timerUrgent
+              ? "bg-destructive/10 text-destructive ring-destructive/30"
+              : "bg-card text-foreground ring-foreground/10"
+          )}
+          aria-live="polite"
+        >
+          <span className="text-xs font-medium tracking-wide uppercase">
+            Move timer
+          </span>
+          <span className="font-heading text-xl font-semibold tabular-nums">
+            {formatCountdown(msLeft)}
+          </span>
+        </div>
+      ) : null}
 
       <div
         className="relative overflow-hidden rounded-3xl bg-card p-3 ring-1 ring-foreground/10"
@@ -334,10 +493,14 @@ export function Game2048View() {
           </div>
         </div>
 
-        {/* Screen-reader board summary */}
         <span className="sr-only">
-          Board score {score}.{" "}
-          {tiles.map((tile) => `${tile.value} at row ${tile.row + 1} column ${tile.col + 1}`).join(". ")}
+          {DIFFICULTY_CONFIG[difficulty].label} mode. Board score {score}.{" "}
+          {tiles
+            .map(
+              (tile) =>
+                `${tile.value} at row ${tile.row + 1} column ${tile.col + 1}`
+            )
+            .join(". ")}
         </span>
 
         {over ? (
@@ -374,6 +537,39 @@ export function Game2048View() {
           </div>
         ) : null}
       </div>
+
+      <Dialog
+        open={pendingDifficulty !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDifficulty(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Switch difficulty?</DialogTitle>
+            <DialogDescription>
+              Switching to{" "}
+              {pendingDifficulty
+                ? DIFFICULTY_CONFIG[pendingDifficulty].label
+                : "another level"}{" "}
+              will reset your current game. Best scores for each level are kept
+              separately.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPendingDifficulty(null)}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={confirmDifficultyChange}>
+              Reset & switch
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

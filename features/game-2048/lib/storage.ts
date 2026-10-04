@@ -1,7 +1,15 @@
 import { SIZE, type Board } from "@/features/game-2048/lib/game";
+import {
+  isDifficulty,
+  type Difficulty,
+} from "@/features/game-2048/lib/difficulty";
 
-const BEST_SCORE_KEY = "life-kit:2048:best";
+const LEGACY_BEST_SCORE_KEY = "life-kit:2048:best";
 const GAME_STATE_KEY = "life-kit:2048:state";
+
+function bestScoreKey(difficulty: Difficulty): string {
+  return `life-kit:2048:best:${difficulty}`;
+}
 
 export type SavedSnapshot = {
   board: Board;
@@ -12,14 +20,31 @@ export type SavedGameState = {
   board: Board;
   score: number;
   over: boolean;
+  difficulty: Difficulty;
   /** Board/score from before the last successful move; null after undo or at start. */
   previous: SavedSnapshot | null;
 };
 
-export function readBestScore(): number {
+function migrateLegacyBestScore(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const legacy = window.localStorage.getItem(LEGACY_BEST_SCORE_KEY);
+    if (!legacy) return;
+    const normalKey = bestScoreKey("normal");
+    if (!window.localStorage.getItem(normalKey)) {
+      window.localStorage.setItem(normalKey, legacy);
+    }
+    window.localStorage.removeItem(LEGACY_BEST_SCORE_KEY);
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+export function readBestScore(difficulty: Difficulty = "normal"): number {
   if (typeof window === "undefined") return 0;
   try {
-    const raw = window.localStorage.getItem(BEST_SCORE_KEY);
+    migrateLegacyBestScore();
+    const raw = window.localStorage.getItem(bestScoreKey(difficulty));
     if (!raw) return 0;
     const value = Number(raw);
     return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
@@ -28,11 +53,14 @@ export function readBestScore(): number {
   }
 }
 
-export function writeBestScore(score: number): void {
+export function writeBestScore(
+  score: number,
+  difficulty: Difficulty = "normal"
+): void {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(
-      BEST_SCORE_KEY,
+      bestScoreKey(difficulty),
       String(Math.max(0, Math.floor(score)))
     );
   } catch {
@@ -82,6 +110,11 @@ function isValidSavedGameState(value: unknown): value is SavedGameState {
   ) {
     return false;
   }
+  // Legacy saves (pre-levels) default to Normal.
+  if (candidate.difficulty === undefined) {
+    candidate.difficulty = "normal";
+  }
+  if (!isDifficulty(candidate.difficulty)) return false;
   if (candidate.previous === null) return true;
   return isValidSnapshot(candidate.previous);
 }
@@ -111,6 +144,7 @@ export function readGameState(): SavedGameState | null {
       board: cloneBoard(parsed.board),
       score: Math.floor(parsed.score),
       over: parsed.over,
+      difficulty: parsed.difficulty,
       previous: parsed.previous ? cloneSnapshot(parsed.previous) : null,
     };
   } catch {
@@ -125,6 +159,7 @@ export function writeGameState(state: SavedGameState): void {
       board: cloneBoard(state.board),
       score: Math.max(0, Math.floor(state.score)),
       over: state.over,
+      difficulty: state.difficulty,
       previous: state.previous ? cloneSnapshot(state.previous) : null,
     };
     window.localStorage.setItem(GAME_STATE_KEY, JSON.stringify(payload));
